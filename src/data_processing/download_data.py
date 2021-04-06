@@ -4,6 +4,7 @@ import argparse
 import requests
 import zipfile
 import tarfile
+import pandas as pd
 
 
 def download_from_url(url, target_path):
@@ -27,7 +28,7 @@ def unzip_file(zip_path, target_path, cleanup):
         os.remove(zip_path)
 
 if __name__ == "__main__":
-    dataset_names = ["fce", "conll_10", "toxic", "wi+locness"]
+    dataset_names = ["fce", "conll_10", "wi+locness"]
 
     parser = argparse.ArgumentParser(description="Dataset downloader and unzipper")
     parser.add_argument("-a", "--all", action="store_true", help="Download all datasets")
@@ -47,23 +48,12 @@ if __name__ == "__main__":
 
         download_from_url(url, os.path.join(target_path, "fce.tar.gz"))
         unzip_file(os.path.join(target_path, "fce.tar.gz"), os.path.join(target_path, "fce_v2.1"), cleanup)
-        
 
     if download_all or "conll_10" in download_datasets:
         url = "https://rgai.inf.u-szeged.hu/sites/rgai.inf.u-szeged.hu/files/trial_Task2.zip"
 
         download_from_url(url, os.path.join(target_path, "conll_10.zip"))
         unzip_file(os.path.join(target_path, "conll_10.zip"), os.path.join(target_path, "conll_10"), cleanup)
-
-    if download_all or "toxic" in download_datasets:
-        url = "https://github.com/ipavlopoulos/toxic_spans/tree/master/data"
-
-        if not os.path.exists(os.path.join(target_path, "toxic")):
-            os.mkdir(os.path.join(target_path, "toxic"))
-
-        download_from_url(url + "tsd_trial.csv", os.path.join(target_path, "toxic", "tsd_trial.csv"))
-        download_from_url(url + "tsd_train.csv", os.path.join(target_path, "toxic", "tsd_train.csv"))
-        download_from_url(url + "tsd_test.csv", os.path.join(target_path, "toxic", "tsd_test.csv"))
 
     if download_all or "wi+locness" in download_datasets:
         url = "https://www.cl.cam.ac.uk/research/nl/bea2019st/data/wi+locness_v2.1.bea19.tar.gz"

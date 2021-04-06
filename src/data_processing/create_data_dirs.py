@@ -3,7 +3,7 @@ import argparse
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Data dir creator")
-    parser.add_argument("-r", "--root", action="store", default="../../", help="Root dir to place data dir")
+    parser.add_argument("-r", "--root", action="store", default="/home/tom/Projects/multi-level-optimisation/", help="Root dir to place data dir")
 
     args = parser.parse_args()
 

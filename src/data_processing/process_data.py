@@ -8,6 +8,10 @@ import xml.sax
 import nltk, re, pprint
 from nltk import word_tokenize
 import random
+import pandas as pd
+import ast
+
+nltk.download('punkt')
 
 class XMLHandler(xml.sax.handler.ContentHandler):
     """
@@ -40,22 +44,22 @@ class XMLHandler(xml.sax.handler.ContentHandler):
                 self.sentence.append((token, label))
 
     def startElement(self, name, attrs):
-        if name == 'cue':
+        if name == "cue":
             self.in_cue += 1
-        elif name == 'xcope':
+        elif name == "xcope":
             self.in_xcope += 1
-        elif name == 'sentence':
+        elif name == "sentence":
             self.in_cue = 0
             self.in_xcope = 0
             self.in_sentence = True
             self.sentence = []
 
     def endElement(self, name):
-        if name == 'cue':
+        if name == "cue":
             self.in_cue -= 1
-        elif name == 'xcope':
+        elif name == "xcope":
             self.in_xcope -= 1
-        elif name == 'sentence':
+        elif name == "sentence":
             self.in_sentence = False
             self.data.append(self.sentence)
 
@@ -63,7 +67,7 @@ def process_m2(m2_path, target_path, include_error_types):
     """
     Adapted from code by M. Rei
     """
-    with open(m2_path, 'r') as m2:
+    with open(m2_path, "r") as m2:
         with open(target_path, "w") as tsv:
             tsv_writer = csv.writer(tsv, delimiter="\t")
             while True:
@@ -102,7 +106,89 @@ def process_m2(m2_path, target_path, include_error_types):
                 else:
                     break
 
-def process_xml()
+def process_conll10_xml(xml_dir, target_dir, mode, filtr):
+    """
+    Adapted from code by M. Rei
+    """
+    random.seed(123)
+
+    if mode == "train":
+        input_files = [os.path.join(xml_dir, "biomed_abstracts_trial.xml"), os.path.join(xml_dir, "biomed_articles_trial.xml")]
+        output_files = [os.path.join(target_dir, "conll_10_{}_train.tsv".format(filtr)), os.path.join(target_dir, "conll_10_{}_dev.tsv".format(filtr))]
+    else:
+        input_files = [os.path.join(xml_dir, "task2_eval_rev.xml")]
+        output_files = [os.path.join(target_dir, "conll_10_{}_test.tsv".format(filtr))]
+
+    data = []
+    for path in input_files:
+        data += XMLHandler(filtr).parse(path)
+
+    if mode == "train":
+        random.shuffle(data)
+        dev_size = int(len(data) / 10.0)
+        data_dev = data[:dev_size]
+        data_train = data[dev_size:]
+
+        with open(output_files[0], "w") as f:
+            for sentence in data_train:
+                for token, label in sentence:
+                    f.write(token + "\t" + label + "\n")
+                f.write("\n")
+
+        with open(output_files[1], "w") as f:
+            for sentence in data_dev:
+                for token, label in sentence:
+                    f.write(token + "\t" + label + "\n")
+                f.write("\n")
+    elif mode == "test":
+        with open(output_files[0], "w") as f:
+            for sentence in data:
+                for token, label in sentence:
+                    f.write(token + "\t" + label + "\n")
+                f.write("\n")
+    else:
+        raise ValueError("Unknown")
+
+def process_toxic_csv(csv_url, target_path):
+    df = pd.read_csv(csv_url)
+
+    with open(target_path, "w") as tsv:
+        tsv_writer = csv.writer(tsv, delimiter="\t")
+        for index, row in df.iterrows():
+            text = row["text"]
+            spans = ast.literal_eval(row["spans"])
+
+            words = []
+            toxics = []
+
+            word = ""
+            toxic = "f"
+
+            for i in range(len(text)):
+                if text[i] in [" ", "\n", "\t"]:
+                    if len(word) != 0:
+                        words.append(word)
+                        toxics.append(toxic)
+
+                    word = ""
+                    toxic = "f"
+                    continue
+
+                elif text[i] in [".", ",", "!", "?", ":", ";", '"', "'"]:
+                    if len(word) != 0:
+                        words.append(word)
+                        toxics.append(toxic)
+
+                    word = ""
+                    toxic = "f"
+
+                word += text[i]
+                if i in spans:
+                    toxic = "t"
+
+            for i in range(len(words)):
+                tsv_writer.writerow([words[i], toxics[i]])
+            tsv_writer.writerow([])    
 
 if __name__ == "__main__":
     dataset_names = ["fce", "conll_10", "toxic", "wi+locness"]
@@ -110,8 +196,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Dataset downloader and unzipper")
     parser.add_argument("-a", "--all", action="store_true", help="Process all datasets")
     parser.add_argument("-d", "--data", action="store", nargs="+", default=[], help="Process specific datasets:{}".format(dataset_names))
-    parser.add_argument("-t", "--target", action="store", default="../../data/processed", help="Target directory to process to")
-    parser.add_argument("-s", "--source", action="store", default="../../data/raw", help="Target directory to process to")
+    parser.add_argument("-t", "--target", action="store", default="/home/tom/Projects/multi-level-optimisation/data/processed", help="Target directory to process to")
+    parser.add_argument("-s", "--source", action="store", default="/home/tom/Projects/multi-level-optimisation/data/raw", help="Target directory to process to")
     parser.add_argument("-c", "--clean", action="store_true", default=False, help="Removes any raw files after processing")
     parser.add_argument("-e", "--errors", action="store_true", default=False, help="Includes error types in tsv file")
 
@@ -138,16 +224,43 @@ if __name__ == "__main__":
             shutil.rmtree(os.path.join(source_path, "fce_v2.1"))
 
     if download_all or "conll_10" in download_datasets:
-        pass
+        xml_dir = os.path.join(source_path, "conll_10", "Task2")
+
+        if not os.path.exists(os.path.join(target_path, "conll_10")):
+            os.mkdir(os.path.join(target_path, "conll_10"))
+
+        process_conll10_xml(xml_dir, os.path.join(target_path, "conll_10"), "train", "cuescope")
+        # process_conll10_xml(xml_dir, os.path.join(target_path, "conll_10"), "test", "cuescope")
+
+        process_conll10_xml(xml_dir, os.path.join(target_path, "conll_10"), "train", "cue")
+        # process_conll10_xml(xml_dir, os.path.join(target_path, "conll_10"), "test", "cue")
+
+        process_conll10_xml(xml_dir, os.path.join(target_path, "conll_10"), "train", "scope")
+        # process_conll10_xml(xml_dir, os.path.join(target_path, "conll_10"), "test", "scope")
+
+        if cleanup:
+            shutil.rmtree(os.path.join(source_path, "conll_10"))
 
     if download_all or "toxic" in download_datasets:
-        pass
+        csv_dir = os.path.join(source_path, "toxic")
+
+        if not os.path.exists(os.path.join(target_path, "toxic")):
+            os.mkdir(os.path.join(target_path, "toxic"))
+
+        url = "https://raw.githubusercontent.com/ipavlopoulos/toxic_spans/master/data/"
+
+        if not os.path.exists(os.path.join(target_path, "toxic")):
+            os.mkdir(os.path.join(target_path, "toxic"))
+
+        process_toxic_csv(url + "tsd_trial.csv", os.path.join(target_path, "toxic", "tsd_trial.tsv"))
+        process_toxic_csv(url + "tsd_train.csv", os.path.join(target_path, "toxic", "tsd_train.tsv"))
+        process_toxic_csv(url + "tsd_test.csv", os.path.join(target_path, "toxic", "tsd_test.tsv"))
 
     if download_all or "wi+locness" in download_datasets:
         m2_dir = os.path.join(source_path, "wi+locness_v2.1", "wi+locness", "m2")
 
         if not os.path.exists(os.path.join(target_path, "wi+locness_v2.1")):
-            os.mkdir(os.path.join(target_path, "wi+locness_v2.1"))
+            os.mkdir(os.path.join(target_path, "wi+locness_v2.1"))  
 
         process_m2(os.path.join(m2_dir, "A.dev.gold.bea19.m2"), os.path.join(target_path, "wi+locness_v2.1", "wi+locness_A_dev.tsv"), include_error_types)
         process_m2(os.path.join(m2_dir, "A.train.gold.bea19.m2"), os.path.join(target_path, "wi+locness_v2.1", "wi+locness_A_train.tsv"), include_error_types)

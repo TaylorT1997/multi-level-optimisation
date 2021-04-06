@@ -1,12 +1,20 @@
 # Data Processing
 
+## Quickstart
+
+```bash
+python create_data_dirs.py
+python download_data.py -a -c
+python process_data.py -a -c
+```
+
 ## create_data_dirs
 
 ### Usage
 Creates the necessary data dirs for downloading and processing the datasets
 
 ### Flags
-- -r --root: Specifies the root dir to create data dirs, "../../" (two levels above current dir) by default
+- -r --root: Specifies the root dir to create data dirs, "/home/tom/Projects/multi-level-optimisation/" (only works for people called Tom) by default
 
 ## download_data
 
