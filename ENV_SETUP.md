@@ -9,12 +9,9 @@ docker run -d -v "/${PWD}:/workspace" -p 8080:8080 --name "ml-workspace" --env A
 ## Anaconda
 
 ```
-conda create -y --name mlo python=3.6
-source activate mlo
-pip install -U pip setuptools wheel
-pip install -r requirements.txt
+conda create -y --name mlo python=3.6 --file requirements.txt
 ```
 
 ```
-pip list --format=freeze > requirements.txt
+conda list -e > requirements.txt
 ```
