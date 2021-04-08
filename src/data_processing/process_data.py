@@ -11,12 +11,14 @@ import random
 import pandas as pd
 import ast
 
-nltk.download('punkt')
+nltk.download("punkt")
+
 
 class XMLHandler(xml.sax.handler.ContentHandler):
     """
     Adapted from code by M. Rei
     """
+
     def __init__(self, filtr):
         self.filtr = filtr
         self.in_sentence = False
@@ -63,6 +65,7 @@ class XMLHandler(xml.sax.handler.ContentHandler):
             self.in_sentence = False
             self.data.append(self.sentence)
 
+
 def process_m2(m2_path, target_path, include_error_types):
     """
     Adapted from code by M. Rei
@@ -106,6 +109,7 @@ def process_m2(m2_path, target_path, include_error_types):
                 else:
                     break
 
+
 def process_conll10_xml(xml_dir, target_dir, mode, filtr):
     """
     Adapted from code by M. Rei
@@ -113,8 +117,14 @@ def process_conll10_xml(xml_dir, target_dir, mode, filtr):
     random.seed(123)
 
     if mode == "train":
-        input_files = [os.path.join(xml_dir, "biomed_abstracts_trial.xml"), os.path.join(xml_dir, "biomed_articles_trial.xml")]
-        output_files = [os.path.join(target_dir, "conll_10_{}_train.tsv".format(filtr)), os.path.join(target_dir, "conll_10_{}_dev.tsv".format(filtr))]
+        input_files = [
+            os.path.join(xml_dir, "biomed_abstracts_trial.xml"),
+            os.path.join(xml_dir, "biomed_articles_trial.xml"),
+        ]
+        output_files = [
+            os.path.join(target_dir, "conll_10_{}_train.tsv".format(filtr)),
+            os.path.join(target_dir, "conll_10_{}_dev.tsv".format(filtr)),
+        ]
     else:
         input_files = [os.path.join(xml_dir, "task2_eval_rev.xml")]
         output_files = [os.path.join(target_dir, "conll_10_{}_test.tsv".format(filtr))]
@@ -148,6 +158,7 @@ def process_conll10_xml(xml_dir, target_dir, mode, filtr):
                 f.write("\n")
     else:
         raise ValueError("Unknown")
+
 
 def process_toxic_csv(csv_url, target_path):
     df = pd.read_csv(csv_url)
@@ -188,18 +199,50 @@ def process_toxic_csv(csv_url, target_path):
 
             for i in range(len(words)):
                 tsv_writer.writerow([words[i], toxics[i]])
-            tsv_writer.writerow([])    
+            tsv_writer.writerow([])
+
 
 if __name__ == "__main__":
-    dataset_names = ["fce", "conll_10", "toxic", "wi+locness"]
+    dataset_names = ["fce", "conll_10", "toxic", "wi_locness"]
 
     parser = argparse.ArgumentParser(description="Dataset downloader and unzipper")
     parser.add_argument("-a", "--all", action="store_true", help="Process all datasets")
-    parser.add_argument("-d", "--data", action="store", nargs="+", default=[], help="Process specific datasets:{}".format(dataset_names))
-    parser.add_argument("-t", "--target", action="store", default="/home/tom/Projects/multi-level-optimisation/data/processed", help="Target directory to process to")
-    parser.add_argument("-s", "--source", action="store", default="/home/tom/Projects/multi-level-optimisation/data/raw", help="Target directory to process to")
-    parser.add_argument("-c", "--clean", action="store_true", default=False, help="Removes any raw files after processing")
-    parser.add_argument("-e", "--errors", action="store_true", default=False, help="Includes error types in tsv file")
+    parser.add_argument(
+        "-d",
+        "--data",
+        action="store",
+        nargs="+",
+        default=[],
+        help="Process specific datasets:{}".format(dataset_names),
+    )
+    parser.add_argument(
+        "-t",
+        "--target",
+        action="store",
+        default="/home/tom/Projects/multi-level-optimisation/data/processed",
+        help="Target directory to process to",
+    )
+    parser.add_argument(
+        "-s",
+        "--source",
+        action="store",
+        default="/home/tom/Projects/multi-level-optimisation/data/raw",
+        help="Target directory to process to",
+    )
+    parser.add_argument(
+        "-c",
+        "--clean",
+        action="store_true",
+        default=False,
+        help="Removes any raw files after processing",
+    )
+    parser.add_argument(
+        "-e",
+        "--errors",
+        action="store_true",
+        default=False,
+        help="Includes error types in tsv file",
+    )
 
     args = parser.parse_args()
 
@@ -216,9 +259,21 @@ if __name__ == "__main__":
         if not os.path.exists(os.path.join(target_path, "fce_v2.1")):
             os.mkdir(os.path.join(target_path, "fce_v2.1"))
 
-        process_m2(os.path.join(m2_dir, "fce.dev.gold.bea19.m2"), os.path.join(target_path, "fce_v2.1", "fce_dev.tsv"), include_error_types)
-        process_m2(os.path.join(m2_dir, "fce.test.gold.bea19.m2"), os.path.join(target_path, "fce_v2.1", "fce_test.tsv"), include_error_types)
-        process_m2(os.path.join(m2_dir, "fce.train.gold.bea19.m2"), os.path.join(target_path, "fce_v2.1", "fce_train.tsv"), include_error_types)
+        process_m2(
+            os.path.join(m2_dir, "fce.dev.gold.bea19.m2"),
+            os.path.join(target_path, "fce_v2.1", "fce_dev.tsv"),
+            include_error_types,
+        )
+        process_m2(
+            os.path.join(m2_dir, "fce.test.gold.bea19.m2"),
+            os.path.join(target_path, "fce_v2.1", "fce_test.tsv"),
+            include_error_types,
+        )
+        process_m2(
+            os.path.join(m2_dir, "fce.train.gold.bea19.m2"),
+            os.path.join(target_path, "fce_v2.1", "fce_train.tsv"),
+            include_error_types,
+        )
 
         if cleanup:
             shutil.rmtree(os.path.join(source_path, "fce_v2.1"))
@@ -229,13 +284,19 @@ if __name__ == "__main__":
         if not os.path.exists(os.path.join(target_path, "conll_10")):
             os.mkdir(os.path.join(target_path, "conll_10"))
 
-        process_conll10_xml(xml_dir, os.path.join(target_path, "conll_10"), "train", "cuescope")
+        process_conll10_xml(
+            xml_dir, os.path.join(target_path, "conll_10"), "train", "cuescope"
+        )
         # process_conll10_xml(xml_dir, os.path.join(target_path, "conll_10"), "test", "cuescope")
 
-        process_conll10_xml(xml_dir, os.path.join(target_path, "conll_10"), "train", "cue")
+        process_conll10_xml(
+            xml_dir, os.path.join(target_path, "conll_10"), "train", "cue"
+        )
         # process_conll10_xml(xml_dir, os.path.join(target_path, "conll_10"), "test", "cue")
 
-        process_conll10_xml(xml_dir, os.path.join(target_path, "conll_10"), "train", "scope")
+        process_conll10_xml(
+            xml_dir, os.path.join(target_path, "conll_10"), "train", "scope"
+        )
         # process_conll10_xml(xml_dir, os.path.join(target_path, "conll_10"), "test", "scope")
 
         if cleanup:
@@ -252,29 +313,71 @@ if __name__ == "__main__":
         if not os.path.exists(os.path.join(target_path, "toxic")):
             os.mkdir(os.path.join(target_path, "toxic"))
 
-        process_toxic_csv(url + "tsd_trial.csv", os.path.join(target_path, "toxic", "tsd_trial.tsv"))
-        process_toxic_csv(url + "tsd_train.csv", os.path.join(target_path, "toxic", "tsd_train.tsv"))
-        process_toxic_csv(url + "tsd_test.csv", os.path.join(target_path, "toxic", "tsd_test.tsv"))
+        process_toxic_csv(
+            url + "tsd_trial.csv", os.path.join(target_path, "toxic", "tsd_dev.tsv")
+        )
+        process_toxic_csv(
+            url + "tsd_train.csv", os.path.join(target_path, "toxic", "tsd_train.tsv")
+        )
+        process_toxic_csv(
+            url + "tsd_test.csv", os.path.join(target_path, "toxic", "tsd_test.tsv")
+        )
 
-    if download_all or "wi+locness" in download_datasets:
-        m2_dir = os.path.join(source_path, "wi+locness_v2.1", "wi+locness", "m2")
+    if download_all or "wi_locness" in download_datasets:
+        m2_dir = os.path.join(source_path, "wi_locness_v2.1", "wi+locness", "m2")
 
-        if not os.path.exists(os.path.join(target_path, "wi+locness_v2.1")):
-            os.mkdir(os.path.join(target_path, "wi+locness_v2.1"))  
+        if not os.path.exists(os.path.join(target_path, "wi_locness_v2.1")):
+            os.mkdir(os.path.join(target_path, "wi_locness_v2.1"))
 
-        process_m2(os.path.join(m2_dir, "A.dev.gold.bea19.m2"), os.path.join(target_path, "wi+locness_v2.1", "wi+locness_A_dev.tsv"), include_error_types)
-        process_m2(os.path.join(m2_dir, "A.train.gold.bea19.m2"), os.path.join(target_path, "wi+locness_v2.1", "wi+locness_A_train.tsv"), include_error_types)
+        process_m2(
+            os.path.join(m2_dir, "A.dev.gold.bea19.m2"),
+            os.path.join(target_path, "wi_locness_v2.1", "wi_locness_A_dev.tsv"),
+            include_error_types,
+        )
+        process_m2(
+            os.path.join(m2_dir, "A.train.gold.bea19.m2"),
+            os.path.join(target_path, "wi_locness_v2.1", "wi_locness_A_train.tsv"),
+            include_error_types,
+        )
 
-        process_m2(os.path.join(m2_dir, "B.dev.gold.bea19.m2"), os.path.join(target_path, "wi+locness_v2.1", "wi+locness_B_dev.tsv"), include_error_types)
-        process_m2(os.path.join(m2_dir, "B.train.gold.bea19.m2"), os.path.join(target_path, "wi+locness_v2.1", "wi+locness_B_train.tsv"), include_error_types)
+        process_m2(
+            os.path.join(m2_dir, "B.dev.gold.bea19.m2"),
+            os.path.join(target_path, "wi_locness_v2.1", "wi_locness_B_dev.tsv"),
+            include_error_types,
+        )
+        process_m2(
+            os.path.join(m2_dir, "B.train.gold.bea19.m2"),
+            os.path.join(target_path, "wi_locness_v2.1", "wi_locness_B_train.tsv"),
+            include_error_types,
+        )
 
-        process_m2(os.path.join(m2_dir, "C.dev.gold.bea19.m2"), os.path.join(target_path, "wi+locness_v2.1", "wi+locness_C_dev.tsv"), include_error_types)
-        process_m2(os.path.join(m2_dir, "C.train.gold.bea19.m2"), os.path.join(target_path, "wi+locness_v2.1", "wi+locness_C_train.tsv"), include_error_types)
+        process_m2(
+            os.path.join(m2_dir, "C.dev.gold.bea19.m2"),
+            os.path.join(target_path, "wi_locness_v2.1", "wi_locness_C_dev.tsv"),
+            include_error_types,
+        )
+        process_m2(
+            os.path.join(m2_dir, "C.train.gold.bea19.m2"),
+            os.path.join(target_path, "wi_locness_v2.1", "wi_locness_C_train.tsv"),
+            include_error_types,
+        )
 
-        process_m2(os.path.join(m2_dir, "N.dev.gold.bea19.m2"), os.path.join(target_path, "wi+locness_v2.1", "wi+locness_N_dev.tsv"), include_error_types)
+        process_m2(
+            os.path.join(m2_dir, "N.dev.gold.bea19.m2"),
+            os.path.join(target_path, "wi_locness_v2.1", "wi_locness_N_dev.tsv"),
+            include_error_types,
+        )
 
-        process_m2(os.path.join(m2_dir, "ABCN.dev.gold.bea19.m2"), os.path.join(target_path, "wi+locness_v2.1", "wi+locness_ABCN_dev.tsv"), include_error_types)
-        process_m2(os.path.join(m2_dir, "ABC.train.gold.bea19.m2"), os.path.join(target_path, "wi+locness_v2.1", "wi+locness_ABC_train.tsv"), include_error_types)
+        process_m2(
+            os.path.join(m2_dir, "ABCN.dev.gold.bea19.m2"),
+            os.path.join(target_path, "wi_locness_v2.1", "wi_locness_ABCN_dev.tsv"),
+            include_error_types,
+        )
+        process_m2(
+            os.path.join(m2_dir, "ABC.train.gold.bea19.m2"),
+            os.path.join(target_path, "wi_locness_v2.1", "wi_locness_ABC_train.tsv"),
+            include_error_types,
+        )
 
         if cleanup:
-            shutil.rmtree(os.path.join(source_path, "wi+locness_v2.1"))
+            shutil.rmtree(os.path.join(source_path, "wi_locness_v2.1"))

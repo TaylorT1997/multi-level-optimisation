@@ -3,7 +3,7 @@
 ## High Priority
 
 - [ ] Sentence classification on datasets (baseline model)
-- [ ] Get the data in a proper state for input into model
+- [ ] Develop torch datasets
 
 ## Medium Priority
 
