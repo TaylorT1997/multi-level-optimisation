@@ -63,7 +63,11 @@ class BinaryTSVDataset(Dataset):
         label = self.labels[idx]
 
         encoded_sequence = self.tokenizer.encode_plus(
-            sequence, padding="max_length", truncation=True, max_length=self.max_length
+            sequence,
+            padding="max_length",
+            truncation=True,
+            max_length=self.max_length,
+            return_tensors="pt",
         )
 
         return encoded_sequence, label
@@ -102,7 +106,7 @@ class BinaryTSVDataset(Dataset):
         encoded_words = []
 
         for word in words:
-            encoded_word = tokenizer.encode(word, add_special_tokens=False)
+            encoded_word = self.tokenizer.encode(word, add_special_tokens=False)
             encoded_words.append(encoded_word)
 
         encoded_output = [word for sublist in encoded_words for word in sublist]
