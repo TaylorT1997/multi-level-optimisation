@@ -15,10 +15,11 @@
 
 - [ ] Google doc for papers
 - [ ] Write up data processing progress
-- [ ] Write up 
+- [ ] Write up sentence dataset progress
 - [X] Share repo
-- [ ] Add sigmoid to make prediction
-- [ ] Add validation set
+- [X] Add sigmoid to make prediction
+- [X] Add validation set
+- [ ] Add precision recall f1
 
 # Blockers
 
