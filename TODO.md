@@ -2,17 +2,23 @@
 
 ## High Priority
 
-- [ ] Sentence classification on datasets (baseline model)
+- [X] Sentence classification on datasets (baseline model)
 - [ ] Develop torch datasets
 
 ## Medium Priority
 
 - [X] Develop scripts that automate the entire data processing pipeline
+- [X] Setup wandb for experiment tracking
+- [ ] Setup remote GPU for training
 
 ## Low Priority
 
 - [ ] Google doc for papers
 - [ ] Write up data processing progress
+- [ ] Write up 
+- [X] Share repo
+- [ ] Add sigmoid to make prediction
+- [ ] Add validation set
 
 # Blockers
 
@@ -35,8 +41,11 @@
 
 - Is it better to add unknown words to vocab or split into tokens?
 - How are split tokens dealt with during testing?
+- How exactly should dev splits be used? What is the benefit? Do we train on train+dev?
 
 ## Low Priority
+
+- What should I be reading for lit review? BERT? DeBERTA? Domain specific papers?
 
 
 # Notes
