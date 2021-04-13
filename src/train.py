@@ -1,5 +1,6 @@
 import sys
 import argparse
+import time
 
 import torch
 from torch.utils.data import DataLoader, Dataset, random_split
@@ -64,6 +65,8 @@ def train(args):
         wandb.watch(model)
 
     for epoch in range(args.epochs):
+        epoch_start = time.time()
+
         # Training loop
         model.train()
         train_corrects = 0
@@ -111,6 +114,8 @@ def train(args):
         model.eval()
         val_corrects = 0
         val_samples = 0
+        val_total_loss = 0
+        val_batches = 0
 
         if args.use_wandb:
             table = wandb.Table(columns=["Input Text", "Predicted Label", "True Label"])
@@ -128,6 +133,8 @@ def train(args):
 
             val_corrects += torch.sum(corrects).detach().numpy()
             val_samples += len(corrects)
+            val_total_loss += loss.item()
+            val_batches += 1
             val_step += 1
 
             if args.use_wandb:
@@ -148,12 +155,16 @@ def train(args):
         val_accuracy = val_corrects / val_samples
         val_av_loss = val_total_loss / val_batches
 
+        epoch_end = time.time()
+        epoch_time = epoch_end - epoch_start
+
         if args.use_wandb:
-            wandb.log({"dev_set_examples".format(args.dataset): table})
+            wandb.log({"val_samples".format(args.dataset): table})
             wandb.log(
                 {
                     "epoch_loss_val": val_av_loss,
                     "epoch_accuracy_val": val_accuracy,
+                    "epoch_time": epoch_time,
                     "epoch": epoch,
                 }
             )
