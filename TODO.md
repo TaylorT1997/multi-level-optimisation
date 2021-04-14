@@ -19,7 +19,10 @@
 - [X] Share repo
 - [X] Add sigmoid to make prediction
 - [X] Add validation set
-- [ ] Add precision recall f1
+- [X] Add precision recall f1
+- [X] Add more configs
+- [X] Add console prints
+- [ ] Functionise logging metrics
 
 # Blockers
 
@@ -40,13 +43,13 @@
 
 ## Medium Priority
 
-- Is it better to add unknown words to vocab or split into tokens?
-- How are split tokens dealt with during testing?
-- How exactly should dev splits be used? What is the benefit? Do we train on train+dev?
+- [X] Is it better to add unknown words to vocab or split into tokens?
+- [X] How are split tokens dealt with during testing?
+- [X] How exactly should dev splits be used? What is the benefit? Do we train on train+dev?
 
 ## Low Priority
 
-- What should I be reading for lit review? BERT? DeBERTA? Domain specific papers?
+- [X] What should I be reading for lit review? BERT? DeBERTA? Domain specific papers?
 
 
 # Notes

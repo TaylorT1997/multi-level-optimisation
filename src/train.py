@@ -1,6 +1,7 @@
 import sys
 import argparse
 import time
+import datetime
 
 import torch
 from torch.utils.data import DataLoader, Dataset, random_split
@@ -25,7 +26,20 @@ def collate_fn(batch):
 
 def train(args):
     torch.manual_seed(666)
-    print(vars(args))
+
+    if not args.silent:
+        print("*" * 30)
+        print("Training: {}".format(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+        print("*" * 30)
+        print()
+        print("Model: {}".format(args.model))
+        print("Tokenizer: {}".format(args.tokenizer))
+        print("Dataset: {}".format(args.dataset))
+        print()
+        print("Batch size: {}".format(args.batch_size))
+        print("Epochs: {}".format(args.epochs))
+        print("Learning rate: {}".format(args.learning_rate))
+        print()
 
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
@@ -64,15 +78,19 @@ def train(args):
         wandb.config.update(args)
         wandb.watch(model)
 
-    for epoch in range(args.epochs):
+    for epoch in range(1, args.epochs + 1):
         epoch_start = time.time()
 
         # Training loop
         model.train()
-        train_corrects = 0
         train_samples = 0
         train_total_loss = 0
         train_batches = 0
+
+        train_true_positives = 0
+        train_false_positives = 0
+        train_true_negatives = 0
+        train_false_negatives = 0
 
         for idx, (input_ids, attention_masks, labels) in enumerate(train_loader):
             optim.zero_grad()
@@ -86,11 +104,32 @@ def train(args):
             loss.backward()
             optim.step()
 
-            preds = outputs.logits > 0.5
-            corrects = preds.view(-1) == labels
+            preds = [1 if x > 0.5 else 0 for x in outputs.logits.view(-1)]
+            actuals = labels.detach().numpy()
 
-            train_corrects += torch.sum(corrects).detach().numpy()
-            train_samples += len(corrects)
+            num_samples = len(actuals)
+
+            true_positives = 0
+            false_positives = 0
+            true_negatives = 0
+            false_negatives = 0
+
+            for i in range(num_samples):
+                if actuals[i] == preds[i] == 1:
+                    true_positives += 1
+                if preds[i] == 1 and actuals[i] != preds[i]:
+                    false_positives += 1
+                if actuals[i] == preds[i] == 0:
+                    true_negatives += 1
+                if preds[i] == 0 and actuals[i] != preds[i]:
+                    false_negatives += 1
+
+            train_true_positives += true_positives
+            train_false_positives += false_positives
+            train_true_negatives += true_negatives
+            train_false_negatives += false_negatives
+
+            train_samples += num_samples
             train_total_loss += loss.item()
             train_batches += 1
             train_step += 1
@@ -98,7 +137,17 @@ def train(args):
             if args.use_wandb:
                 wandb.log({"step_loss_train": loss.item(), "train_step": train_step})
 
-        train_accuracy = train_corrects / train_samples
+        # Calculate training metrics
+        train_accuracy = (train_true_positives + train_true_negatives) / train_samples
+        train_precision = train_true_positives / (
+            train_true_positives + train_false_positives + 1e-5
+        )
+        train_recall = train_true_positives / (
+            train_true_positives + train_false_negatives + 1e-5
+        )
+        train_f1 = (2 * train_precision * train_recall) / (
+            train_precision + train_recall + 1e-5
+        )
         train_av_loss = train_total_loss / train_batches
 
         if args.use_wandb:
@@ -106,16 +155,23 @@ def train(args):
                 {
                     "epoch_loss_train": train_av_loss,
                     "epoch_accuracy_train": train_accuracy,
+                    "epoch_precision_train": train_precision,
+                    "epoch_recall_train": train_recall,
+                    "epoch_f1_train": train_f1,
                     "epoch": epoch,
                 }
             )
 
         # Validation loop
         model.eval()
-        val_corrects = 0
         val_samples = 0
         val_total_loss = 0
         val_batches = 0
+
+        val_true_positives = 0
+        val_false_positives = 0
+        val_true_negatives = 0
+        val_false_negatives = 0
 
         if args.use_wandb:
             table = wandb.Table(columns=["Input Text", "Predicted Label", "True Label"])
@@ -128,11 +184,32 @@ def train(args):
             outputs = model(input_ids, attention_mask=attention_masks, labels=labels)
             loss = outputs.loss
 
-            preds = outputs.logits > 0.5
-            corrects = preds.view(-1) == labels
+            preds = [1 if x > 0.5 else 0 for x in outputs.logits.view(-1)]
+            actuals = labels.detach().numpy()
 
-            val_corrects += torch.sum(corrects).detach().numpy()
-            val_samples += len(corrects)
+            num_samples = len(actuals)
+
+            true_positives = 0
+            false_positives = 0
+            true_negatives = 0
+            false_negatives = 0
+
+            for i in range(num_samples):
+                if actuals[i] == preds[i] == 1:
+                    true_positives += 1
+                if preds[i] == 1 and actuals[i] != preds[i]:
+                    false_positives += 1
+                if actuals[i] == preds[i] == 0:
+                    true_negatives += 1
+                if preds[i] == 0 and actuals[i] != preds[i]:
+                    false_negatives += 1
+
+            val_true_positives += true_positives
+            val_false_positives += false_positives
+            val_true_negatives += true_negatives
+            val_false_negatives += false_negatives
+
+            val_samples += num_samples
             val_total_loss += loss.item()
             val_batches += 1
             val_step += 1
@@ -152,22 +229,53 @@ def train(args):
                     pred_label = outputs.logits[i].detach().numpy()[0]
                     table.add_data(input_text, str(pred_label), str(true_label))
 
-        val_accuracy = val_corrects / val_samples
-        val_av_loss = val_total_loss / val_batches
-
+        # Epoch time
         epoch_end = time.time()
         epoch_time = epoch_end - epoch_start
 
+        # Calculate validation metrics
+        val_accuracy = (val_true_positives + val_true_negatives) / val_samples
+        val_precision = val_true_positives / (
+            val_true_positives + val_false_positives + 1e-5
+        )
+        val_recall = val_true_positives / (
+            val_true_positives + val_false_negatives + 1e-5
+        )
+        val_f1 = (2 * val_precision * val_recall) / (val_precision + val_recall + 1e-5)
+        val_av_loss = val_total_loss / val_batches
+
         if args.use_wandb:
-            wandb.log({"val_samples".format(args.dataset): table})
             wandb.log(
                 {
                     "epoch_loss_val": val_av_loss,
                     "epoch_accuracy_val": val_accuracy,
+                    "epoch_precision_val": val_precision,
+                    "epoch_recall_val": val_recall,
+                    "epoch_f1_val": val_f1,
                     "epoch_time": epoch_time,
                     "epoch": epoch,
                 }
             )
+
+        if not args.silent:
+            print()
+            print("-" * 30)
+            print("Epoch {} / {}".format(epoch, args.epochs))
+            print("-" * 30)
+            print()
+            print("Training loss: {:.4f}".format(train_av_loss))
+            print("Training accuracy: {:.2f}".format(train_accuracy))
+            print("Training precision: {:.2f}".format(train_precision))
+            print("Training recall: {:.2f}".format(train_recall))
+            print("Training f1: {:.2f}".format(train_f1))
+            print()
+            print("Validation loss: {:.4f}".format(val_av_loss))
+            print("Validation accuracy: {:.2f}".format(val_accuracy))
+            print("Validation precision: {:.2f}".format(val_precision))
+            print("Validation recall: {:.2f}".format(val_recall))
+            print("Validation f1: {:.2f}".format(val_f1))
+            print()
+            print("Epoch time: {:.0f}".format(epoch_time))
 
 
 if __name__ == "__main__":
@@ -221,6 +329,14 @@ if __name__ == "__main__":
         action="store_true",
         default=False,
         help="Use wandb to track run (default: False)",
+    )
+
+    parser.add_argument(
+        "-s",
+        "--silent",
+        action="store_true",
+        default=False,
+        help="Silence console prints (default: False)",
     )
 
     args = parser.parse_args()
