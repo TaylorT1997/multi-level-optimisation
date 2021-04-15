@@ -219,14 +219,14 @@ if __name__ == "__main__":
         "-t",
         "--target",
         action="store",
-        default="/home/tom/Projects/multi-level-optimisation/data/processed",
+        default="../../data/processed",
         help="Target directory to process to",
     )
     parser.add_argument(
         "-s",
         "--source",
         action="store",
-        default="/home/tom/Projects/multi-level-optimisation/data/raw",
+        default="../../data/raw",
         help="Target directory to process to",
     )
     parser.add_argument(

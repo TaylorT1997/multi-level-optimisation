@@ -55,10 +55,10 @@ def train(args):
     model.to(device)
 
     train_dataset = BinaryTSVDataset(
-        dataset_name=args.dataset, tokenizer=tokenizer, mode="train"
+        dataset_name=args.dataset, tokenizer=tokenizer, root_dir=args.root, mode="train"
     )
     val_dataset = BinaryTSVDataset(
-        dataset_name=args.dataset, tokenizer=tokenizer, mode="dev"
+        dataset_name=args.dataset, tokenizer=tokenizer, root_dir=args.root, mode="dev"
     )
 
     train_loader = DataLoader(
@@ -105,7 +105,7 @@ def train(args):
             optim.step()
 
             preds = [1 if x > 0.5 else 0 for x in outputs.logits.view(-1)]
-            actuals = labels.detach().numpy()
+            actuals = labels.detach().cpu().numpy()
 
             num_samples = len(actuals)
 
@@ -185,7 +185,7 @@ def train(args):
             loss = outputs.loss
 
             preds = [1 if x > 0.5 else 0 for x in outputs.logits.view(-1)]
-            actuals = labels.detach().numpy()
+            actuals = labels.detach().cpu().numpy()
 
             num_samples = len(actuals)
 
@@ -225,8 +225,8 @@ def train(args):
                         skip_special_tokens=True,
                         clean_up_tokenization_spaces=True,
                     )
-                    true_label = labels[i].detach().numpy()
-                    pred_label = outputs.logits[i].detach().numpy()[0]
+                    true_label = labels[i].detach().cpu().numpy()
+                    pred_label = outputs.logits[i].detach().cpu().numpy()[0]
                     table.add_data(input_text, str(pred_label), str(true_label))
 
         # Epoch time
@@ -246,7 +246,8 @@ def train(args):
 
         if args.use_wandb:
             wandb.log(
-                {
+                {   
+                    "examples_val": table,
                     "epoch_loss_val": val_av_loss,
                     "epoch_accuracy_val": val_accuracy,
                     "epoch_precision_val": val_precision,
@@ -280,10 +281,21 @@ def train(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train model")
+
+    parser.add_argument(
+        "-r",
+        "--root",
+        action="store",
+        type=str,
+        default="/home/tom/Projects/multi-level-optimisation/",
+        help="Root directory of project",
+    )
+
     parser.add_argument(
         "-m",
         "--model",
         action="store",
+        type=str,
         default="bert-base-cased",
         help="Pretrained model to use",
     )
@@ -291,6 +303,7 @@ if __name__ == "__main__":
         "-t",
         "--tokenizer",
         action="store",
+        type=str,
         default="bert-base-cased",
         help="Pretrained tokenizer to use",
     )
@@ -299,18 +312,20 @@ if __name__ == "__main__":
         "-d",
         "--dataset",
         action="store",
+        type=str,
         default="conll_10",
         help="Dataset to train on",
     )
 
     parser.add_argument(
-        "-b", "--batch_size", action="store", default=8, help="Batch size (default: 8)",
+        "-b", "--batch_size", action="store", type=int, default=8, help="Batch size (default: 8)",
     )
 
     parser.add_argument(
         "-e",
         "--epochs",
         action="store",
+        type=int,
         default=10,
         help="Number of epochs (default: 10)",
     )
@@ -319,6 +334,7 @@ if __name__ == "__main__":
         "-l",
         "--learning_rate",
         action="store",
+        type=float,
         default=1e-5,
         help="Learning rate (default: 0.0001)",
     )

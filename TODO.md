@@ -3,13 +3,13 @@
 ## High Priority
 
 - [X] Sentence classification on datasets (baseline model)
-- [ ] Develop torch datasets
+- [X] Develop torch datasets
 
 ## Medium Priority
 
 - [X] Develop scripts that automate the entire data processing pipeline
 - [X] Setup wandb for experiment tracking
-- [ ] Setup remote GPU for training
+- [X] Setup remote GPU for training
 
 ## Low Priority
 
@@ -31,7 +31,7 @@
 
 ## Medium Priority
 
-- Find task2_eval xml file for CONLL-10 
+- [ ] Find task2_eval xml file for CONLL-10 
 
 ## Low Priority
 

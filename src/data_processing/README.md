@@ -3,7 +3,7 @@
 ## Quickstart
 
 ```bash
-python create_data_dirs.py
+python create_data_dirs.py -r /home/USERNAME/Projects/multi-level-optimisation/
 python download_data.py -a -c
 python process_data.py -a -c
 ```
