@@ -118,8 +118,8 @@ def process_conll10_xml(xml_dir, target_dir, mode, filtr):
 
     if mode == "train":
         input_files = [
-            os.path.join(xml_dir, "biomed_abstracts_trial.xml"),
-            os.path.join(xml_dir, "biomed_articles_trial.xml"),
+            os.path.join(xml_dir, "abstracts.xml"),
+            os.path.join(xml_dir, "full_papers.xml"),
         ]
         output_files = [
             os.path.join(target_dir, "conll_10_{}_train.tsv".format(filtr)),
@@ -279,7 +279,7 @@ if __name__ == "__main__":
             shutil.rmtree(os.path.join(source_path, "fce_v2.1"))
 
     if download_all or "conll_10" in download_datasets:
-        xml_dir = os.path.join(source_path, "conll_10", "Task2")
+        xml_dir = os.path.join(source_path, "conll_10")
 
         if not os.path.exists(os.path.join(target_path, "conll_10")):
             os.mkdir(os.path.join(target_path, "conll_10"))
