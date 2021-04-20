@@ -3,18 +3,22 @@
 ## High Priority
 
 - [X] Sentence classification on datasets (baseline model)
-- [X] Develop torch datasets
+- [X] Develop torch dataset for sentence classification
+- [X] Develop torch dataset for token classification
+- [ ] Create model with token and sentence supervision
 
 ## Medium Priority
 
 - [X] Develop scripts that automate the entire data processing pipeline
 - [X] Setup wandb for experiment tracking
 - [X] Setup remote GPU for training
+- [X] Train baseline sentence level models
+- [ ] Get access to eval file from CoNLL-10 authors
 
 ## Low Priority
 
-- [ ] Google doc for papers
-- [ ] Write up data processing progress
+- [ ] Overleaf for papers
+- [X] Write up data processing progress
 - [ ] Write up sentence dataset progress
 - [X] Share repo
 - [X] Add sigmoid to make prediction
@@ -23,6 +27,8 @@
 - [X] Add more configs
 - [X] Add console prints
 - [ ] Functionise logging metrics
+- [X] Fix CoNLL-10 train download and processing
+- [ ] Read and summarise 'core' papers
 
 # Blockers
 
@@ -46,6 +52,7 @@
 - [X] Is it better to add unknown words to vocab or split into tokens?
 - [X] How are split tokens dealt with during testing?
 - [X] How exactly should dev splits be used? What is the benefit? Do we train on train+dev?
+- [ ] Which token labelling approach is preferrable? All or First?
 
 ## Low Priority
 

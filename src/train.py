@@ -7,21 +7,22 @@ import torch
 from torch.utils.data import DataLoader, Dataset, random_split
 from transformers import BertForSequenceClassification, BertTokenizer, AdamW, BertConfig
 
-from data_loading.datasets import BinaryTSVDataset
+from data_loading.datasets import BinarySentenceTSVDataset, BinaryTokenTSVDataset
 
 import wandb
 
 
 def collate_fn(batch):
-    input_ids, attention_masks, labels = [], [], []
-    for data_dict, label in batch:
+    input_ids, attention_masks, labels, token_labels = [], [], [], []
+    for data_dict, label, token_label in batch:
         input_ids.append(data_dict["input_ids"])
         attention_masks.append(data_dict["attention_mask"])
         labels.append(label)
+        token_labels.append(token_label)
 
     input_ids = torch.cat(input_ids)
     attention_masks = torch.cat(attention_masks)
-    return input_ids, attention_masks, labels
+    return input_ids, attention_masks, labels, token_labels
 
 
 def train(args):
@@ -29,7 +30,9 @@ def train(args):
 
     if not args.silent:
         print("*" * 30)
-        print("Training: {}".format(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+        print(
+            "Training: {}".format(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        )
         print("*" * 30)
         print()
         print("Model: {}".format(args.model))
@@ -54,10 +57,10 @@ def train(args):
 
     model.to(device)
 
-    train_dataset = BinaryTSVDataset(
+    train_dataset = BinaryTokenTSVDataset(
         dataset_name=args.dataset, tokenizer=tokenizer, root_dir=args.root, mode="train"
     )
-    val_dataset = BinaryTSVDataset(
+    val_dataset = BinaryTokenTSVDataset(
         dataset_name=args.dataset, tokenizer=tokenizer, root_dir=args.root, mode="dev"
     )
 
@@ -92,7 +95,9 @@ def train(args):
         train_true_negatives = 0
         train_false_negatives = 0
 
-        for idx, (input_ids, attention_masks, labels) in enumerate(train_loader):
+        for idx, (input_ids, attention_masks, labels, token_labels) in enumerate(
+            train_loader
+        ):
             optim.zero_grad()
 
             input_ids = input_ids.to(device)
@@ -176,7 +181,9 @@ def train(args):
         if args.use_wandb:
             table = wandb.Table(columns=["Input Text", "Predicted Label", "True Label"])
 
-        for idx, (input_ids, attention_masks, labels) in enumerate(val_loader):
+        for idx, (input_ids, attention_masks, labels, token_labels) in enumerate(
+            val_loader
+        ):
             input_ids = input_ids.to(device)
             attention_masks = attention_masks.to(device)
             labels = torch.tensor(labels, dtype=torch.float, device=device)
@@ -246,7 +253,7 @@ def train(args):
 
         if args.use_wandb:
             wandb.log(
-                {   
+                {
                     "examples_val": table,
                     "epoch_loss_val": val_av_loss,
                     "epoch_accuracy_val": val_accuracy,
@@ -318,7 +325,12 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "-b", "--batch_size", action="store", type=int, default=8, help="Batch size (default: 8)",
+        "-b",
+        "--batch_size",
+        action="store",
+        type=int,
+        default=8,
+        help="Batch size (default: 8)",
     )
 
     parser.add_argument(
