@@ -79,9 +79,18 @@ if __name__ == "__main__":
         )
 
     if download_all or "conll_10" in download_datasets:
-        # url = "https://rgai.inf.u-szeged.hu/sites/rgai.inf.u-szeged.hu/files/trial_Task2.zip"
-        # url = "https://rgai.inf.u-szeged.hu/sites/rgai.inf.u-szeged.hu/files/uncertainty.zip"
-        url = "https://rgai.sed.hu/sites/rgai.sed.hu/files/bioscope.zip"
+        url = (
+            "http://www.inf.u-szeged.hu/~vinczev/conll2010st/task2_train_bio_rev2_1.zip"
+        )
+
+        download_from_url(url, os.path.join(target_path, "conll_10.zip"))
+        unzip_file(
+            os.path.join(target_path, "conll_10.zip"),
+            os.path.join(target_path, "conll_10"),
+            cleanup,
+        )
+
+        url = "http://www.inf.u-szeged.hu/~vinczev/conll2010st/task2_eval_rev.zip"
 
         download_from_url(url, os.path.join(target_path, "conll_10.zip"))
         unzip_file(

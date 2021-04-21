@@ -118,8 +118,8 @@ def process_conll10_xml(xml_dir, target_dir, mode, filtr):
 
     if mode == "train":
         input_files = [
-            os.path.join(xml_dir, "abstracts.xml"),
-            os.path.join(xml_dir, "full_papers.xml"),
+            os.path.join(xml_dir, "task2_train_bio_abstracts_rev2.xml"),
+            os.path.join(xml_dir, "task2_train_bio_fullarticles_rev2.xml"),
         ]
         output_files = [
             os.path.join(target_dir, "conll_10_{}_train.tsv".format(filtr)),
@@ -287,17 +287,23 @@ if __name__ == "__main__":
         process_conll10_xml(
             xml_dir, os.path.join(target_path, "conll_10"), "train", "cuescope"
         )
-        # process_conll10_xml(xml_dir, os.path.join(target_path, "conll_10"), "test", "cuescope")
+        process_conll10_xml(
+            xml_dir, os.path.join(target_path, "conll_10"), "test", "cuescope"
+        )
 
         process_conll10_xml(
             xml_dir, os.path.join(target_path, "conll_10"), "train", "cue"
         )
-        # process_conll10_xml(xml_dir, os.path.join(target_path, "conll_10"), "test", "cue")
+        process_conll10_xml(
+            xml_dir, os.path.join(target_path, "conll_10"), "test", "cue"
+        )
 
         process_conll10_xml(
             xml_dir, os.path.join(target_path, "conll_10"), "train", "scope"
         )
-        # process_conll10_xml(xml_dir, os.path.join(target_path, "conll_10"), "test", "scope")
+        process_conll10_xml(
+            xml_dir, os.path.join(target_path, "conll_10"), "test", "scope"
+        )
 
         if cleanup:
             shutil.rmtree(os.path.join(source_path, "conll_10"))

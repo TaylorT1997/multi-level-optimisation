@@ -13,7 +13,7 @@
 - [X] Setup wandb for experiment tracking
 - [X] Setup remote GPU for training
 - [X] Train baseline sentence level models
-- [ ] Get access to eval file from CoNLL-10 authors
+- [X] Get access to eval file from CoNLL-10 authors
 
 ## Low Priority
 
