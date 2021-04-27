@@ -5,9 +5,18 @@ import datetime
 
 import torch
 from torch.utils.data import DataLoader, Dataset, random_split
-from transformers import BertForSequenceClassification, BertTokenizer, AdamW, BertConfig
+from transformers import (
+    BertForSequenceClassification,
+    BertTokenizer,
+    AdamW,
+    BertConfig,
+    DebertaTokenizer,
+    DebertaForSequenceClassification,
+    DebertaConfig,
+)
 
 from data_loading.datasets import BinarySentenceTSVDataset, BinaryTokenTSVDataset
+from models.model import TokenModel
 
 import wandb
 
@@ -46,10 +55,20 @@ def train(args):
 
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
-    model_config = BertConfig.from_pretrained(args.model, num_labels=1)
-    model = BertForSequenceClassification(model_config)
-
-    tokenizer = BertTokenizer.from_pretrained(args.tokenizer)
+    if "bert-base" in args.model:
+        if args.mlo_model:
+            model = TokenModel(pretrained_model=args.model)
+        else:
+            model_config = BertConfig.from_pretrained(args.model, num_labels=1)
+            model = BertForSequenceClassification(model_config)
+        tokenizer = BertTokenizer.from_pretrained(args.tokenizer)
+    elif "deberta-base" in args.model:
+        if args.mlo_model:
+            model = TokenModel(pretrained_model=args.model)
+        else:
+            model_config = DebertaConfig.from_pretrained(args.model, num_labels=1)
+            model = DebertaForSequenceClassification(model_config)
+        tokenizer = DebertaTokenizer.from_pretrained(args.tokenizer)
 
     model.classifier = torch.nn.Sequential(
         torch.nn.Linear(in_features=768, out_features=1, bias=True), torch.nn.Sigmoid()
@@ -103,8 +122,17 @@ def train(args):
             input_ids = input_ids.to(device)
             attention_masks = attention_masks.to(device)
             labels = torch.tensor(labels, dtype=torch.float, device=device)
+            token_labels = torch.tensor(token_labels, dtype=torch.float, device=device)
 
-            outputs = model(input_ids, attention_mask=attention_masks, labels=labels)
+            if args.mlo_model:
+                outputs = model(
+                    input_ids, attention_mask=attention_masks, labels=token_labels
+                )
+            else:
+                outputs = model(
+                    input_ids, attention_mask=attention_masks, labels=labels
+                )
+
             loss = outputs.loss
             loss.backward()
             optim.step()
@@ -299,15 +327,21 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "-m",
         "--model",
         action="store",
         type=str,
         default="bert-base-cased",
         help="Pretrained model to use",
     )
+
     parser.add_argument(
-        "-t",
+        "--mlo_model",
+        action="store_true",
+        default=False,
+        help="Use multi-level optimisation model (default: False)",
+    )
+
+    parser.add_argument(
         "--tokenizer",
         action="store",
         type=str,
@@ -316,7 +350,6 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "-d",
         "--dataset",
         action="store",
         type=str,
@@ -325,7 +358,6 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "-b",
         "--batch_size",
         action="store",
         type=int,
@@ -334,7 +366,6 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "-e",
         "--epochs",
         action="store",
         type=int,
@@ -343,7 +374,6 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "-l",
         "--learning_rate",
         action="store",
         type=float,

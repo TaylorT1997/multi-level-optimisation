@@ -5,7 +5,8 @@
 - [X] Sentence classification on datasets (baseline model)
 - [X] Develop torch dataset for sentence classification
 - [X] Develop torch dataset for token classification
-- [ ] Create model with token and sentence supervision
+- [X] Create model with token and sentence supervision
+- [ ] Full run of token model
 
 ## Medium Priority
 
@@ -14,6 +15,10 @@
 - [X] Setup remote GPU for training
 - [X] Train baseline sentence level models
 - [X] Get access to eval file from CoNLL-10 authors
+- [ ] Implement early stopping
+- [ ] Add regularisation losses
+- [ ] Add BERT losses
+- [ ] Run sentence classification on DeBERTa
 
 ## Low Priority
 
@@ -29,6 +34,7 @@
 - [ ] Functionise logging metrics
 - [X] Fix CoNLL-10 train download and processing
 - [ ] Read and summarise 'core' papers
+- [ ] Remove CLS and SEP tokens
 
 # Blockers
 
@@ -37,7 +43,7 @@
 
 ## Medium Priority
 
-- [ ] Find task2_eval xml file for CONLL-10 
+- [X] Find task2_eval xml file for CONLL-10 
 
 ## Low Priority
 
@@ -46,13 +52,17 @@
 
 ## High Priority
 
+- [ ] Is SUM SUM too harsh a loss for the tokens?
+- [ ] How important is training the pretrained encoder?
 
 ## Medium Priority
 
 - [X] Is it better to add unknown words to vocab or split into tokens?
 - [X] How are split tokens dealt with during testing?
 - [X] How exactly should dev splits be used? What is the benefit? Do we train on train+dev?
-- [ ] Which token labelling approach is preferrable? All or First?
+- [X] Which token labelling approach is preferrable? All or First?
+- [ ] Can we completely ignore CLS and SEP tokens in sentence classification?
+- [ ] Could we do everything directly from BERT?
 
 ## Low Priority
 
