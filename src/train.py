@@ -15,6 +15,7 @@ from transformers import (
     DebertaTokenizer,
     DebertaForSequenceClassification,
     DebertaConfig,
+    GPT2Tokenizer
 )
 
 from data_loading.datasets import BinarySentenceTSVDataset, BinaryTokenTSVDataset
@@ -159,7 +160,7 @@ def train(args):
             input_ids = input_ids.to(device)
             attention_masks = attention_masks.to(device)
             labels = torch.tensor(labels, dtype=torch.float, device=device)
-            
+
             if args.mlo_model:
                 token_labels = torch.tensor(token_labels, dtype=torch.float, device=device)
                 outputs = model(
@@ -293,12 +294,18 @@ def train(args):
                     )
 
                     for i in range(len(labels)):
-                        input_text = tokenizer.decode(
-                            input_ids[i],
-                            skip_special_tokens=True,
-                            clean_up_tokenization_spaces=True,
-                        )
-                        true_label = labels[i].detach().cpu().numpy()
+                        if "deberta" in args.tokenizer:
+                            # Need to use gpt2 tokenizer due to bug with deberta tokenizer
+                            input_text = [tokenizer.gpt2_tokenizer.decode([tokenizer.gpt2_tokenizer.sym(id)]) if tokenizer.gpt2_tokenizer.sym(id) not in tokenizer.all_special_tokens else tokenizer.gpt2_tokenizer.sym(id) for id in input_ids[i]]
+                            input_text = list(filter(lambda x: x != "[CLS]" and x != "[SEP]" and x != "[PAD]", input_text))
+                            input_text = " ".join(input_text)
+                        else:
+                            input_text = tokenizer.decode(
+                                input_ids[i],
+                                skip_special_tokens=True,
+                                clean_up_tokenization_spaces=True,
+                            )
+                        true_label = actuals[i]
                         pred_label = outputs.logits[i].detach().cpu().numpy()
                         table.add_data(input_text, str(pred_label), str(true_label))
 

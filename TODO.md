@@ -69,7 +69,7 @@
 ## Low Priority
 
 - [X] What should I be reading for lit review? BERT? DeBERTA? Domain specific papers?
-
+- [ ] Can the model use the fact that a word has been split into multiple word parts to predict that it is a mistake?
 
 # Notes
 
