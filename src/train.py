@@ -115,6 +115,8 @@ def train(args):
     val_step = 0
 
     # Record best metrics
+    best_epoch = 0
+
     best_train_loss = 1e10
     best_train_accuracy = 0
     best_train_precision = 0
@@ -363,6 +365,8 @@ def train(args):
 
         # Determine whether to do early stopping
         if val_av_loss < best_val_loss:
+            best_epoch = epoch
+
             best_train_loss = train_av_loss
             best_train_accuracy = train_accuracy
             best_train_precision = train_precision
@@ -389,11 +393,31 @@ def train(args):
     training_finish = time.time()
     training_time = training_finish - training_start
 
+    if args.use_wandb:
+        wandb.log(
+            {
+                "best_epoch": best_epoch,
+                "best_train_loss": best_train_loss,
+                "best_train_accuracy": best_train_accuracy,
+                "best_train_precision": best_train_precision,
+                "best_train_recall": best_train_recall,
+                "best_train_f1": best_train_f1,
+                "best_val_loss": best_val_loss,
+                "best_val_accuracy": best_val_accuracy,
+                "best_val_precision": best_val_precision,
+                "best_val_recall": best_val_recall,
+                "best_val_f1": best_val_f1,
+                "training_time": training_time
+            }
+        )
+
     if not args.silent:
         print()
         print("-" * 30)
         print("Training ended at epoch {}".format(epoch))
         print("-" * 30)
+        print()
+        print("Best epoch: {:.4f}".format(best_epoch))
         print()
         print("Best training loss: {:.4f}".format(best_train_loss))
         print("Best training accuracy: {:.2f}".format(best_train_accuracy))
