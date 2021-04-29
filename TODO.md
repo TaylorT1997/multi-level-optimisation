@@ -15,10 +15,11 @@
 - [X] Setup remote GPU for training
 - [X] Train baseline sentence level models
 - [X] Get access to eval file from CoNLL-10 authors
-- [ ] Implement early stopping
+- [X] Implement early stopping
 - [ ] Add regularisation losses
 - [ ] Add BERT losses
-- [ ] Run sentence classification on DeBERTa
+- [X] Run sentence classification on DeBERTa
+- [X] Add LR scheduler
 
 ## Low Priority
 
@@ -35,6 +36,7 @@
 - [X] Fix CoNLL-10 train download and processing
 - [ ] Read and summarise 'core' papers
 - [ ] Remove CLS and SEP tokens
+- [ ] Add more schedulers and optimizers
 
 # Blockers
 

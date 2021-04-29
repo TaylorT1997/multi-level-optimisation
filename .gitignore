@@ -1,6 +1,7 @@
 # Data and wandb dirs
-\data
-\wandb
+/data
+wandb
+/models
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

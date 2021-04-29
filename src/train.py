@@ -2,8 +2,10 @@ import sys
 import argparse
 import time
 import datetime
+import os
 
 import torch
+import torch.optim as optim
 from torch.utils.data import DataLoader, Dataset, random_split
 from transformers import (
     BertForSequenceClassification,
@@ -51,7 +53,17 @@ def train(args):
         print("Batch size: {}".format(args.batch_size))
         print("Epochs: {}".format(args.epochs))
         print("Learning rate: {}".format(args.learning_rate))
+        print("Early stopping patience: {}".format(args.early_stopping_patience))
         print()
+        print("Optimizer: {}".format(args.lr_optimizer))
+        print("Scheduler: {}".format(args.lr_scheduler))
+        print("Scheduler step size: {}".format(args.lr_scheduler_step))
+        print("Scheduler gamma: {}".format(args.lr_scheduler_gamma))
+
+    if args.save_model:
+        model_dir = os.path.join(args.root, "models", "{}_{}".format(args.dataset, datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S")))
+        if not os.path.exists(model_dir):
+            os.mkdir(model_dir)
 
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
@@ -90,9 +102,32 @@ def train(args):
         val_dataset, batch_size=args.batch_size, shuffle=False, collate_fn=collate_fn
     )
 
-    optim = AdamW(model.parameters(), lr=args.learning_rate)
+    # Optimizer and scheduler
+    if args.lr_optimizer == "adamw":
+        optimizer = optim.AdamW(model.parameters(), lr=args.learning_rate)
+
+    if args.lr_scheduler == "steplr":
+        scheduler =  optim.lr_scheduler.StepLR(optimizer, step_size=args.lr_scheduler_step, gamma=args.lr_scheduler_gamma)
+
+    # Record steps
     train_step = 0
     val_step = 0
+
+    # Record best metrics
+    best_train_loss = 1e10
+    best_train_accuracy = 0
+    best_train_precision = 0
+    best_train_recall = 0
+    best_train_f1 = 0
+
+    best_val_loss = 1e10
+    best_val_accuracy = 0
+    best_val_precision = 0
+    best_val_recall = 0
+    best_val_f1 = 0
+
+    # Early stopping
+    no_improvement_num = 0
 
     # Log and print configuration
     if args.use_wandb:
@@ -100,11 +135,13 @@ def train(args):
         wandb.config.update(args)
         wandb.watch(model)
 
-    for epoch in range(1, args.epochs + 1):
-        epoch_start = time.time()
+    training_start = time.time()
 
+    for epoch in range(1, args.epochs + 1):
         # Training loop
+        epoch_start = time.time()
         model.train()
+
         train_samples = 0
         train_total_loss = 0
         train_batches = 0
@@ -117,14 +154,14 @@ def train(args):
         for idx, (input_ids, attention_masks, labels, token_labels) in enumerate(
             train_loader
         ):
-            optim.zero_grad()
+            optimizer.zero_grad()
 
             input_ids = input_ids.to(device)
             attention_masks = attention_masks.to(device)
             labels = torch.tensor(labels, dtype=torch.float, device=device)
-            token_labels = torch.tensor(token_labels, dtype=torch.float, device=device)
-
+            
             if args.mlo_model:
+                token_labels = torch.tensor(token_labels, dtype=torch.float, device=device)
                 outputs = model(
                     input_ids, attention_mask=attention_masks, labels=token_labels
                 )
@@ -135,7 +172,7 @@ def train(args):
 
             loss = outputs.loss
             loss.backward()
-            optim.step()
+            optimizer.step()
 
             preds = [1 if x > 0.5 else 0 for x in outputs.logits.view(-1)]
             actuals = labels.detach().cpu().numpy()
@@ -209,60 +246,61 @@ def train(args):
         if args.use_wandb:
             table = wandb.Table(columns=["Input Text", "Predicted Label", "True Label"])
 
-        for idx, (input_ids, attention_masks, labels, token_labels) in enumerate(
-            val_loader
-        ):
-            input_ids = input_ids.to(device)
-            attention_masks = attention_masks.to(device)
-            labels = torch.tensor(labels, dtype=torch.float, device=device)
+        with torch.no_grad():
+            for idx, (input_ids, attention_masks, labels, token_labels) in enumerate(
+                val_loader
+            ):
+                input_ids = input_ids.to(device)
+                attention_masks = attention_masks.to(device)
+                labels = torch.tensor(labels, dtype=torch.float, device=device)
 
-            outputs = model(input_ids, attention_mask=attention_masks, labels=labels)
-            loss = outputs.loss
+                outputs = model(input_ids, attention_mask=attention_masks, labels=labels)
+                loss = outputs.loss
 
-            preds = [1 if x > 0.5 else 0 for x in outputs.logits.view(-1)]
-            actuals = labels.detach().cpu().numpy()
+                preds = [1 if x > 0.5 else 0 for x in outputs.logits.view(-1)]
+                actuals = labels.detach().cpu().numpy()
 
-            num_samples = len(actuals)
+                num_samples = len(actuals)
 
-            true_positives = 0
-            false_positives = 0
-            true_negatives = 0
-            false_negatives = 0
+                true_positives = 0
+                false_positives = 0
+                true_negatives = 0
+                false_negatives = 0
 
-            for i in range(num_samples):
-                if actuals[i] == preds[i] == 1:
-                    true_positives += 1
-                if preds[i] == 1 and actuals[i] != preds[i]:
-                    false_positives += 1
-                if actuals[i] == preds[i] == 0:
-                    true_negatives += 1
-                if preds[i] == 0 and actuals[i] != preds[i]:
-                    false_negatives += 1
+                for i in range(num_samples):
+                    if actuals[i] == preds[i] == 1:
+                        true_positives += 1
+                    if preds[i] == 1 and actuals[i] != preds[i]:
+                        false_positives += 1
+                    if actuals[i] == preds[i] == 0:
+                        true_negatives += 1
+                    if preds[i] == 0 and actuals[i] != preds[i]:
+                        false_negatives += 1
 
-            val_true_positives += true_positives
-            val_false_positives += false_positives
-            val_true_negatives += true_negatives
-            val_false_negatives += false_negatives
+                val_true_positives += true_positives
+                val_false_positives += false_positives
+                val_true_negatives += true_negatives
+                val_false_negatives += false_negatives
 
-            val_samples += num_samples
-            val_total_loss += loss.item()
-            val_batches += 1
-            val_step += 1
+                val_samples += num_samples
+                val_total_loss += loss.item()
+                val_batches += 1
+                val_step += 1
 
-            if args.use_wandb:
-                wandb.log(
-                    {"step_loss_val": loss.item(), "val_step": val_step,}
-                )
-
-                for i in range(len(labels)):
-                    input_text = tokenizer.decode(
-                        input_ids[i],
-                        skip_special_tokens=True,
-                        clean_up_tokenization_spaces=True,
+                if args.use_wandb:
+                    wandb.log(
+                        {"step_loss_val": loss.item(), "val_step": val_step,}
                     )
-                    true_label = labels[i].detach().cpu().numpy()
-                    pred_label = outputs.logits[i].detach().cpu().numpy()[0]
-                    table.add_data(input_text, str(pred_label), str(true_label))
+
+                    for i in range(len(labels)):
+                        input_text = tokenizer.decode(
+                            input_ids[i],
+                            skip_special_tokens=True,
+                            clean_up_tokenization_spaces=True,
+                        )
+                        true_label = labels[i].detach().cpu().numpy()
+                        pred_label = outputs.logits[i].detach().cpu().numpy()
+                        table.add_data(input_text, str(pred_label), str(true_label))
 
         # Epoch time
         epoch_end = time.time()
@@ -293,6 +331,9 @@ def train(args):
                 }
             )
 
+        # Update lr scheduler
+        scheduler.step()
+
         if not args.silent:
             print()
             print("-" * 30)
@@ -312,6 +353,54 @@ def train(args):
             print("Validation f1: {:.2f}".format(val_f1))
             print()
             print("Epoch time: {:.0f}".format(epoch_time))
+
+        # Determine whether to do early stopping
+        if val_av_loss < best_val_loss:
+            best_train_loss = train_av_loss
+            best_train_accuracy = train_accuracy
+            best_train_precision = train_precision
+            best_train_recall = train_recall
+            best_train_f1 = train_f1
+
+            best_val_loss = val_av_loss
+            best_val_accuracy = val_accuracy
+            best_val_precision = val_precision
+            best_val_recall = val_recall
+            best_val_f1 = val_f1
+
+            no_improvements_num = 0
+
+            if args.save_model:
+                torch.save(model.state_dict(), os.path.join(model_dir, "model.pt"))
+            
+        else:
+            no_improvement_num += 1
+        
+        if no_improvement_num == args.early_stopping_patience:
+            break
+
+    training_finish = time.time()
+    training_time = training_finish - training_start
+
+    if not args.silent:
+        print()
+        print("-" * 30)
+        print("Training ended at epoch {}".format(epoch))
+        print("-" * 30)
+        print()
+        print("Best training loss: {:.4f}".format(best_train_loss))
+        print("Best training accuracy: {:.2f}".format(best_train_accuracy))
+        print("Best training precision: {:.2f}".format(best_train_precision))
+        print("Best training recall: {:.2f}".format(best_train_recall))
+        print("Best training f1: {:.2f}".format(best_train_f1))
+        print()
+        print("Best validation loss: {:.4f}".format(best_val_loss))
+        print("Best validation accuracy: {:.2f}".format(best_val_accuracy))
+        print("Best validation precision: {:.2f}".format(best_val_precision))
+        print("Best validation recall: {:.2f}".format(best_val_recall))
+        print("Best validation f1: {:.2f}".format(best_val_f1))
+        print()
+        print("Training time: {:.0f}".format(training_time))
 
 
 if __name__ == "__main__":
@@ -395,6 +484,53 @@ if __name__ == "__main__":
         action="store_true",
         default=False,
         help="Silence console prints (default: False)",
+    )
+
+    parser.add_argument(
+        "--early_stopping_patience",
+        action="store",
+        type=int,
+        default=5,
+        help="Number of epochs to wait for performance to improve (default: 5)",
+    )
+
+    parser.add_argument(
+        "--save_model",
+        action="store_true",
+        default=False,
+        help="Save best model (default: False)",
+    )
+
+    parser.add_argument(
+        "--lr_optimizer",
+        action="store",
+        type=str,
+        default="adamw",
+        help="Type of optimizer to use (default: adamw)",
+    )
+
+    parser.add_argument(
+        "--lr_scheduler",
+        action="store",
+        type=str,
+        default="steplr",
+        help="Type of shceduler to use (default: steplr)",
+    )
+
+    parser.add_argument(
+        "--lr_scheduler_step",
+        action="store",
+        type=int,
+        default=5,
+        help="Scheduler step size (default: 5)",
+    )
+
+    parser.add_argument(
+        "--lr_scheduler_gamma",
+        action="store",
+        type=float,
+        default=0.1,
+        help="Scheduler gamma (default: 0.1)",
     )
 
     args = parser.parse_args()
