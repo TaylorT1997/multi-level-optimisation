@@ -3,6 +3,7 @@ import argparse
 import time
 import datetime
 import os
+import configargparse
 
 import torch
 import torch.optim as optim
@@ -15,7 +16,7 @@ from transformers import (
     DebertaTokenizer,
     DebertaForSequenceClassification,
     DebertaConfig,
-    GPT2Tokenizer
+    GPT2Tokenizer,
 )
 
 from data_loading.datasets import BinarySentenceTSVDataset, BinaryTokenTSVDataset
@@ -31,7 +32,6 @@ def collate_fn(batch):
         attention_masks.append(data_dict["attention_mask"])
         labels.append(label)
         token_labels.append(token_label)
-
     input_ids = torch.cat(input_ids)
     attention_masks = torch.cat(attention_masks)
     return input_ids, attention_masks, labels, token_labels
@@ -60,9 +60,29 @@ def train(args):
         print("Scheduler: {}".format(args.lr_scheduler))
         print("Scheduler step size: {}".format(args.lr_scheduler_step))
         print("Scheduler gamma: {}".format(args.lr_scheduler_gamma))
+        print()
+        print("Soft attention beta: {}".format(args.soft_attention_beta))
+        print("Sentence loss weight: {}".format(args.sentence_loss_weight))
+        print("Token loss weight: {}".format(args.token_loss_weight))
+        print("Regularizer loss weight: {}".format(args.regularizer_loss_weight))
+        print("Token supervision: {}".format(args.token_supervision))
+        print(
+            "Normalise supervised losses: {}".format(args.normalise_supervised_losses)
+        )
+        print(
+            "Normalise regularization losses: {}".format(
+                args.normalise_regularization_losses
+            )
+        )
 
     if args.save_model:
-        model_dir = os.path.join(args.root, "models", "{}_{}".format(args.dataset, datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S")))
+        model_dir = os.path.join(
+            args.root,
+            "models",
+            "{}_{}".format(
+                args.dataset, datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
+            ),
+        )
         if not os.path.exists(model_dir):
             os.mkdir(model_dir)
 
@@ -70,14 +90,32 @@ def train(args):
 
     if "bert-base" in args.model:
         if args.mlo_model:
-            model = TokenModel(pretrained_model=args.model)
+            model = TokenModel(
+                pretrained_model=args.model,
+                soft_attention_beta=args.soft_attention_beta,
+                sentence_loss_weight=args.sentence_loss_weight,
+                token_loss_weight=args.token_loss_weight,
+                regularizer_loss_weight=args.regularizer_loss_weight,
+                token_supervision=args.token_supervision,
+                normalise_supervised_losses=args.normalise_supervised_losses,
+                normalise_regularization_losses=args.normalise_regularization_losses,
+            )
         else:
             model_config = BertConfig.from_pretrained(args.model, num_labels=1)
             model = BertForSequenceClassification(model_config)
         tokenizer = BertTokenizer.from_pretrained(args.tokenizer)
     elif "deberta-base" in args.model:
         if args.mlo_model:
-            model = TokenModel(pretrained_model=args.model)
+            model = TokenModel(
+                pretrained_model=args.model,
+                soft_attention_beta=args.soft_attention_beta,
+                sentence_loss_weight=args.sentence_loss_weight,
+                token_loss_weight=args.token_loss_weight,
+                regularizer_loss_weight=args.regularizer_loss_weight,
+                token_supervision=args.token_supervision,
+                normalise_supervised_losses=args.normalise_supervised_losses,
+                normalise_regularization_losses=args.normalise_regularization_losses,
+            )
         else:
             model_config = DebertaConfig.from_pretrained(args.model, num_labels=1)
             model = DebertaForSequenceClassification(model_config)
@@ -90,10 +128,18 @@ def train(args):
     model.to(device)
 
     train_dataset = BinaryTokenTSVDataset(
-        dataset_name=args.dataset, tokenizer=tokenizer, root_dir=args.root, mode="train"
+        dataset_name=args.dataset,
+        tokenizer=tokenizer,
+        root_dir=args.root,
+        mode="train",
+        include_special_tokens=True,
     )
     val_dataset = BinaryTokenTSVDataset(
-        dataset_name=args.dataset, tokenizer=tokenizer, root_dir=args.root, mode="dev"
+        dataset_name=args.dataset,
+        tokenizer=tokenizer,
+        root_dir=args.root,
+        mode="dev",
+        include_special_tokens=True,
     )
 
     train_loader = DataLoader(
@@ -108,7 +154,9 @@ def train(args):
         optimizer = optim.AdamW(model.parameters(), lr=args.learning_rate)
 
     if args.lr_scheduler == "steplr":
-        scheduler =  optim.lr_scheduler.StepLR(optimizer, step_size=args.lr_scheduler_step, gamma=args.lr_scheduler_gamma)
+        scheduler = optim.lr_scheduler.StepLR(
+            optimizer, step_size=args.lr_scheduler_step, gamma=args.lr_scheduler_gamma
+        )
 
     # Record steps
     train_step = 0
@@ -164,20 +212,25 @@ def train(args):
             labels = torch.tensor(labels, dtype=torch.float, device=device)
 
             if args.mlo_model:
-                token_labels = torch.tensor(token_labels, dtype=torch.float, device=device)
+                token_labels = torch.tensor(
+                    token_labels, dtype=torch.float, device=device
+                )
                 outputs = model(
                     input_ids, attention_mask=attention_masks, labels=token_labels
                 )
+                loss = outputs["loss"]
+                sequence_logits = outputs["sequence_logits"]
             else:
                 outputs = model(
                     input_ids, attention_mask=attention_masks, labels=labels
                 )
+                loss = outputs.loss
+                sequence_logits = outputs.logits
 
-            loss = outputs.loss
             loss.backward()
             optimizer.step()
 
-            preds = [1 if x > 0.5 else 0 for x in outputs.logits.view(-1)]
+            preds = [1 if x > 0.5 else 0 for x in sequence_logits.view(-1)]
             actuals = labels.detach().cpu().numpy()
 
             num_samples = len(actuals)
@@ -257,10 +310,23 @@ def train(args):
                 attention_masks = attention_masks.to(device)
                 labels = torch.tensor(labels, dtype=torch.float, device=device)
 
-                outputs = model(input_ids, attention_mask=attention_masks, labels=labels)
-                loss = outputs.loss
+                if args.mlo_model:
+                    token_labels = torch.tensor(
+                        token_labels, dtype=torch.float, device=device
+                    )
+                    outputs = model(
+                        input_ids, attention_mask=attention_masks, labels=token_labels
+                    )
+                    loss = outputs["loss"]
+                    sequence_logits = outputs["sequence_logits"]
+                else:
+                    outputs = model(
+                        input_ids, attention_mask=attention_masks, labels=labels
+                    )
+                    loss = outputs.loss
+                    sequence_logits = outputs.logits
 
-                preds = [1 if x > 0.5 else 0 for x in outputs.logits.view(-1)]
+                preds = [1 if x > 0.5 else 0 for x in sequence_logits.view(-1)]
                 actuals = labels.detach().cpu().numpy()
 
                 num_samples = len(actuals)
@@ -298,8 +364,23 @@ def train(args):
                     for i in range(len(labels)):
                         if "deberta" in args.tokenizer:
                             # Need to use gpt2 tokenizer due to bug with deberta tokenizer
-                            input_text = [tokenizer.gpt2_tokenizer.decode([tokenizer.gpt2_tokenizer.sym(id)]) if tokenizer.gpt2_tokenizer.sym(id) not in tokenizer.all_special_tokens else tokenizer.gpt2_tokenizer.sym(id) for id in input_ids[i]]
-                            input_text = list(filter(lambda x: x != "[CLS]" and x != "[SEP]" and x != "[PAD]", input_text))
+                            input_text = [
+                                tokenizer.gpt2_tokenizer.decode(
+                                    [tokenizer.gpt2_tokenizer.sym(id)]
+                                )
+                                if tokenizer.gpt2_tokenizer.sym(id)
+                                not in tokenizer.all_special_tokens
+                                else tokenizer.gpt2_tokenizer.sym(id)
+                                for id in input_ids[i]
+                            ]
+                            input_text = list(
+                                filter(
+                                    lambda x: x != "[CLS]"
+                                    and x != "[SEP]"
+                                    and x != "[PAD]",
+                                    input_text,
+                                )
+                            )
                             input_text = " ".join(input_text)
                         else:
                             input_text = tokenizer.decode(
@@ -383,10 +464,10 @@ def train(args):
 
             if args.save_model:
                 torch.save(model.state_dict(), os.path.join(model_dir, "model.pt"))
-            
+
         else:
             no_improvement_num += 1
-        
+
         if no_improvement_num == args.early_stopping_patience:
             break
 
@@ -407,7 +488,7 @@ def train(args):
                 "best_val_precision": best_val_precision,
                 "best_val_recall": best_val_recall,
                 "best_val_f1": best_val_f1,
-                "training_time": training_time
+                "training_time": training_time,
             }
         )
 
@@ -435,9 +516,16 @@ def train(args):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Train model")
+    # parser = argparse.ArgumentParser(description="Train model")
+    parser = configargparse.ArgParser(
+        default_config_files=["/home/tom/Projects/multi-level-optimisation/config.txt"]
+    )
 
-    parser.add_argument(
+    parser.add(
+        "-c", "--config", required=True, is_config_file=True, help="Config file path"
+    )
+
+    parser.add(
         "-r",
         "--root",
         action="store",
@@ -446,7 +534,7 @@ if __name__ == "__main__":
         help="Root directory of project",
     )
 
-    parser.add_argument(
+    parser.add(
         "--model",
         action="store",
         type=str,
@@ -454,14 +542,14 @@ if __name__ == "__main__":
         help="Pretrained model to use",
     )
 
-    parser.add_argument(
+    parser.add(
         "--mlo_model",
         action="store_true",
         default=False,
         help="Use multi-level optimisation model (default: False)",
     )
 
-    parser.add_argument(
+    parser.add(
         "--tokenizer",
         action="store",
         type=str,
@@ -469,7 +557,7 @@ if __name__ == "__main__":
         help="Pretrained tokenizer to use",
     )
 
-    parser.add_argument(
+    parser.add(
         "--dataset",
         action="store",
         type=str,
@@ -477,7 +565,7 @@ if __name__ == "__main__":
         help="Dataset to train on",
     )
 
-    parser.add_argument(
+    parser.add(
         "--batch_size",
         action="store",
         type=int,
@@ -485,7 +573,7 @@ if __name__ == "__main__":
         help="Batch size (default: 8)",
     )
 
-    parser.add_argument(
+    parser.add(
         "--epochs",
         action="store",
         type=int,
@@ -493,7 +581,7 @@ if __name__ == "__main__":
         help="Number of epochs (default: 10)",
     )
 
-    parser.add_argument(
+    parser.add(
         "--learning_rate",
         action="store",
         type=float,
@@ -501,7 +589,7 @@ if __name__ == "__main__":
         help="Learning rate (default: 0.0001)",
     )
 
-    parser.add_argument(
+    parser.add(
         "-w",
         "--use_wandb",
         action="store_true",
@@ -509,7 +597,7 @@ if __name__ == "__main__":
         help="Use wandb to track run (default: False)",
     )
 
-    parser.add_argument(
+    parser.add(
         "-s",
         "--silent",
         action="store_true",
@@ -517,7 +605,7 @@ if __name__ == "__main__":
         help="Silence console prints (default: False)",
     )
 
-    parser.add_argument(
+    parser.add(
         "--early_stopping_patience",
         action="store",
         type=int,
@@ -525,14 +613,14 @@ if __name__ == "__main__":
         help="Number of epochs to wait for performance to improve (default: 5)",
     )
 
-    parser.add_argument(
+    parser.add(
         "--save_model",
         action="store_true",
         default=False,
         help="Save best model (default: False)",
     )
 
-    parser.add_argument(
+    parser.add(
         "--lr_optimizer",
         action="store",
         type=str,
@@ -540,7 +628,7 @@ if __name__ == "__main__":
         help="Type of optimizer to use (default: adamw)",
     )
 
-    parser.add_argument(
+    parser.add(
         "--lr_scheduler",
         action="store",
         type=str,
@@ -548,7 +636,7 @@ if __name__ == "__main__":
         help="Type of shceduler to use (default: steplr)",
     )
 
-    parser.add_argument(
+    parser.add(
         "--lr_scheduler_step",
         action="store",
         type=int,
@@ -556,7 +644,7 @@ if __name__ == "__main__":
         help="Scheduler step size (default: 5)",
     )
 
-    parser.add_argument(
+    parser.add(
         "--lr_scheduler_gamma",
         action="store",
         type=float,
@@ -564,6 +652,61 @@ if __name__ == "__main__":
         help="Scheduler gamma (default: 0.1)",
     )
 
+    parser.add(
+        "--soft_attention_beta",
+        action="store",
+        type=float,
+        default=1,
+        help="Soft attention beta value (default: 1)",
+    )
+
+    parser.add(
+        "--sentence_loss_weight",
+        action="store",
+        type=float,
+        default=1,
+        help="Sentence loss weight (default: 1)",
+    )
+
+    parser.add(
+        "--token_loss_weight",
+        action="store",
+        type=float,
+        default=1,
+        help="Token loss weight (default: 1)",
+    )
+
+    parser.add(
+        "--regularizer_loss_weight",
+        action="store",
+        type=float,
+        default=0.01,
+        help="Regularizer loss weight (default: 0.01)",
+    )
+
+    parser.add(
+        "--token_supervision",
+        action="store_true",
+        default=False,
+        help="Use token supervision (default: True)",
+    )
+
+    parser.add(
+        "--normalise_supervised_losses",
+        action="store_true",
+        default=False,
+        help="Normalise supervised losses (default: False)",
+    )
+
+    parser.add(
+        "--normalise_regularization_losses",
+        action="store_true",
+        default=False,
+        help="Normalise regularisation losses (default: False)",
+    )
+
     args = parser.parse_args()
+
+    print(args)
 
     train(args)

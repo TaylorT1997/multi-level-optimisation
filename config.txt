@@ -1,0 +1,26 @@
+# Config settings for train.py
+
+root = "/home/tom/Projects/multi-level-optimisation/"
+
+model = "bert-base-cased"
+tokenizer = "bert-base-cased"
+
+dataset = "conll_10"
+
+epochs = 11
+batch_size = 9
+learning_rate = 1e-4
+early_stopping_patience = 7
+lr_optimizer = adamw
+lr_scheduler = steplr
+lr_scheduler_step = 5
+lr_scheduler_gamma = 0.1
+
+soft_attention_beta = 1
+sentence_loss_weight = 1
+token_loss_weight = 1
+regularizer_loss_weight = 0.01
+token_supervision = true
+normalise_supervised_losses = true
+
+save_model = true

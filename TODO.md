@@ -16,10 +16,15 @@
 - [X] Train baseline sentence level models
 - [X] Get access to eval file from CoNLL-10 authors
 - [X] Implement early stopping
-- [ ] Add regularisation losses
+- [X] Add regularisation losses
 - [ ] Add BERT losses
 - [X] Run sentence classification on DeBERTa
 - [X] Add LR scheduler
+- [ ] State of the art comparison
+- [ ] Start on background report
+- [X] Add quadratic soft attention
+- [ ] Add option for CRT
+- [X] Add config file
 
 ## Low Priority
 
@@ -35,8 +40,10 @@
 - [ ] Functionise logging metrics
 - [X] Fix CoNLL-10 train download and processing
 - [ ] Read and summarise 'core' papers
-- [ ] Remove CLS and SEP tokens
+- [X] Remove CLS and SEP tokens
 - [ ] Add more schedulers and optimizers
+- [X] Apply mask to normalisation of attention
+- [X] Add option to use CLS token
 
 # Blockers
 
@@ -55,7 +62,7 @@
 ## High Priority
 
 - [ ] Is SUM SUM too harsh a loss for the tokens?
-- [ ] How important is training the pretrained encoder?
+- [X] How important is training the pretrained encoder?
 
 ## Medium Priority
 
@@ -63,13 +70,14 @@
 - [X] How are split tokens dealt with during testing?
 - [X] How exactly should dev splits be used? What is the benefit? Do we train on train+dev?
 - [X] Which token labelling approach is preferrable? All or First?
-- [ ] Can we completely ignore CLS and SEP tokens in sentence classification?
+- [X] Can we completely ignore CLS and SEP tokens in sentence classification?
 - [ ] Could we do everything directly from BERT?
+- [ ] Should we normalise the losses by batch size?
 
 ## Low Priority
 
 - [X] What should I be reading for lit review? BERT? DeBERTA? Domain specific papers?
-- [ ] Can the model use the fact that a word has been split into multiple word parts to predict that it is a mistake?
+- [X] Can the model use the fact that a word has been split into multiple word parts to predict that it is a mistake?
 
 # Notes
 

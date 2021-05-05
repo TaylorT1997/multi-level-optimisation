@@ -3,6 +3,7 @@ import csv
 import numpy as np
 
 import torch
+import torch.nn as nn
 from torch.utils.data import Dataset
 
 from transformers import BertTokenizer
@@ -112,9 +113,6 @@ class BinarySentenceTSVDataset(Dataset):
         encoded_output = [word for sublist in encoded_words for word in sublist]
         return encoded_output
 
-    def _add_masked_tokens(self):
-        pass
-
     def _get_max_length(self, sentences):
         max_length = 0
         for sentence in sentences:
@@ -134,12 +132,14 @@ class BinaryTokenTSVDataset(Dataset):
         token_label_mode="all",
         conll_10_type="cue",
         wi_locness_type="A",
+        include_special_tokens=False,
     ):
         datasets = ["fce", "conll_10", "toxic", "wi_locness"]
 
         self.tokenizer = tokenizer
         self.mode = mode
         self.token_label_mode = token_label_mode
+        self.include_special_tokens = include_special_tokens
 
         if dataset_name == "conll_10":
             data_dir = os.path.join(root_dir, "data", "processed", "conll_10")
@@ -192,6 +192,14 @@ class BinaryTokenTSVDataset(Dataset):
             max_length=self.max_length,
             return_tensors="pt",
         )
+
+        if self.include_special_tokens:
+            token_labels.insert(0, sentence_label)
+            token_labels.append(sentence_label)
+            token_labels.extend([-1] * (self.max_length - len(token_labels)))
+        else:
+            token_labels.insert(0, -1)
+            token_labels.extend([-1] * (self.max_length - len(token_labels)))
 
         return encoded_sequence, sentence_label, token_labels
 
@@ -252,14 +260,11 @@ class BinaryTokenTSVDataset(Dataset):
         encoded_output = [word for sublist in encoded_tokens for word in sublist]
         return encoded_output, encoded_labels
 
-    def _add_masked_tokens(self):
-        pass
-
     def _get_max_length(self, sentences):
         max_length = 0
         for sentence in sentences:
             length = len(sentence)
             if length > max_length:
                 max_length = length
-        return max_length
+        return max_length + 2
 
