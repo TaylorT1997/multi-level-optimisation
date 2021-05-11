@@ -4,12 +4,13 @@ root = "/home/tom/Projects/multi-level-optimisation/"
 
 model = "bert-base-cased"
 tokenizer = "bert-base-cased"
+mlo_model = true
 
 dataset = "conll_10"
 
 epochs = 11
 batch_size = 9
-learning_rate = 1e-4
+learning_rate = 1e-6
 early_stopping_patience = 7
 lr_optimizer = adamw
 lr_scheduler = steplr
@@ -24,3 +25,4 @@ token_supervision = true
 normalise_supervised_losses = true
 
 save_model = true
+use_wandb = true

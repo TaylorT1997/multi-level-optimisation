@@ -48,6 +48,7 @@ def train(args):
         print("*" * 30)
         print()
         print("Model: {}".format(args.model))
+        print("Multi-level optimisation: {}".format(args.mlo_model))
         print("Tokenizer: {}".format(args.tokenizer))
         print("Dataset: {}".format(args.dataset))
         print()
@@ -197,65 +198,102 @@ def train(args):
         train_total_loss = 0
         train_batches = 0
 
-        train_true_positives = 0
-        train_false_positives = 0
-        train_true_negatives = 0
-        train_false_negatives = 0
+        train_seq_true_positives = 0
+        train_seq_false_positives = 0
+        train_seq_true_negatives = 0
+        train_seq_false_negatives = 0
+
+        train_token_true_positives = 0
+        train_token_false_positives = 0
+        train_token_true_negatives = 0
+        train_token_false_negatives = 0
 
         for idx, (input_ids, attention_masks, labels, token_labels) in enumerate(
             train_loader
         ):
+            # Zero any accumulated gradients
             optimizer.zero_grad()
 
+            # Gather input_ids, attention masks, sequence labels and token labels from batch
             input_ids = input_ids.to(device)
             attention_masks = attention_masks.to(device)
             labels = torch.tensor(labels, dtype=torch.float, device=device)
+            token_labels = torch.tensor(token_labels, dtype=torch.float, device=device)
 
+            # If using mlo model pass inputs and token labels through mlo model
             if args.mlo_model:
-                token_labels = torch.tensor(
-                    token_labels, dtype=torch.float, device=device
-                )
                 outputs = model(
                     input_ids, attention_mask=attention_masks, labels=token_labels
                 )
                 loss = outputs["loss"]
-                sequence_logits = outputs["sequence_logits"]
+                seq_logits = outputs["sequence_logits"]
+                token_logits = outputs["token_logits"]
+
+            # Otherwise pass inputs and sequence labels through basic pretrained model
             else:
                 outputs = model(
                     input_ids, attention_mask=attention_masks, labels=labels
                 )
                 loss = outputs.loss
-                sequence_logits = outputs.logits
+                seq_logits = outputs.logits
 
+            # Backpropagate losses and update weights
             loss.backward()
             optimizer.step()
 
-            preds = [1 if x > 0.5 else 0 for x in sequence_logits.view(-1)]
-            actuals = labels.detach().cpu().numpy()
+            # Calculate token prediction metrics
+            if args.mlo_model:
+                token_preds = token_logits > 0.5
+                token_actuals = token_labels
 
-            num_samples = len(actuals)
+                masked_zeros = torch.where(
+                    token_actuals != -1, token_actuals, torch.zeros_like(token_actuals)
+                )
+                masked_ones = torch.where(
+                    token_actuals != -1, token_actuals, torch.ones_like(token_actuals)
+                )
 
-            true_positives = 0
-            false_positives = 0
-            true_negatives = 0
-            false_negatives = 0
+                token_true_positives = torch.sum(
+                    torch.logical_and(token_preds == 1, masked_zeros == 1)
+                ).item()
+                token_false_positives = torch.sum(
+                    torch.logical_and(token_preds == 1, masked_ones == 0)
+                ).item()
+                token_true_negatives = torch.sum(
+                    torch.logical_and(token_preds == 0, masked_ones == 0)
+                ).item()
+                token_false_negatives = torch.sum(
+                    torch.logical_and(token_preds == 0, masked_zeros == 1)
+                ).item()
 
-            for i in range(num_samples):
-                if actuals[i] == preds[i] == 1:
-                    true_positives += 1
-                if preds[i] == 1 and actuals[i] != preds[i]:
-                    false_positives += 1
-                if actuals[i] == preds[i] == 0:
-                    true_negatives += 1
-                if preds[i] == 0 and actuals[i] != preds[i]:
-                    false_negatives += 1
+                train_token_true_positives += token_true_positives
+                train_token_false_positives += token_false_positives
+                train_token_true_negatives += token_true_negatives
+                train_token_false_negatives += token_false_negatives
 
-            train_true_positives += true_positives
-            train_false_positives += false_positives
-            train_true_negatives += true_negatives
-            train_false_negatives += false_negatives
+            # Calculate sequence prediction metrics
+            seq_preds = seq_logits.view(-1) > 0.5
+            seq_actuals = labels
 
-            train_samples += num_samples
+            seq_true_positives = torch.sum(
+                torch.logical_and(seq_preds == 1, seq_actuals == 1)
+            ).item()
+            seq_false_positives = torch.sum(
+                torch.logical_and(seq_preds == 1, seq_actuals == 0)
+            ).item()
+            seq_true_negatives = torch.sum(
+                torch.logical_and(seq_preds == 0, seq_actuals == 0)
+            ).item()
+            seq_false_negatives = torch.sum(
+                torch.logical_and(seq_preds == 0, seq_actuals == 1)
+            ).item()
+
+            train_seq_true_positives += seq_true_positives
+            train_seq_false_positives += seq_false_positives
+            train_seq_true_negatives += seq_true_negatives
+            train_seq_false_negatives += seq_false_negatives
+
+            train_samples += len(seq_preds)
             train_total_loss += loss.item()
             train_batches += 1
             train_step += 1
@@ -264,26 +302,64 @@ def train(args):
                 wandb.log({"step_loss_train": loss.item(), "train_step": train_step})
 
         # Calculate training metrics
-        train_accuracy = (train_true_positives + train_true_negatives) / train_samples
-        train_precision = train_true_positives / (
-            train_true_positives + train_false_positives + 1e-5
+        seq_train_accuracy = (
+            train_seq_true_positives + train_seq_true_negatives
+        ) / train_samples
+        seq_train_precision = train_seq_true_positives / (
+            train_seq_true_positives + train_seq_false_positives + 1e-5
         )
-        train_recall = train_true_positives / (
-            train_true_positives + train_false_negatives + 1e-5
+        seq_train_recall = train_seq_true_positives / (
+            train_seq_true_positives + train_seq_false_negatives + 1e-5
         )
-        train_f1 = (2 * train_precision * train_recall) / (
-            train_precision + train_recall + 1e-5
+        seq_train_f1 = (2 * seq_train_precision * seq_train_recall) / (
+            seq_train_precision + seq_train_recall + 1e-5
         )
+        seq_train_f05 = (1.25 * seq_train_precision * seq_train_recall) / (
+            0.25 * seq_train_precision + seq_train_recall + 1e-5
+        )
+
+        token_train_accuracy = (
+            train_token_true_positives + train_token_true_negatives
+        ) / train_samples
+        token_train_precision = train_token_true_positives / (
+            train_token_true_positives + train_token_false_positives + 1e-5
+        )
+        token_train_recall = train_token_true_positives / (
+            train_token_true_positives + train_token_false_negatives + 1e-5
+        )
+        token_train_f1 = (2 * token_train_precision * token_train_recall) / (
+            token_train_precision + token_train_recall + 1e-5
+        )
+        token_train_f05 = (1.25 * token_train_precision * token_train_recall) / (
+            0.25 * token_train_precision + token_train_recall + 1e-5
+        )
+
         train_av_loss = train_total_loss / train_batches
 
         if args.use_wandb:
             wandb.log(
                 {
                     "epoch_loss_train": train_av_loss,
-                    "epoch_accuracy_train": train_accuracy,
-                    "epoch_precision_train": train_precision,
-                    "epoch_recall_train": train_recall,
-                    "epoch_f1_train": train_f1,
+                    "epoch_seq_accuracy_train": seq_train_accuracy,
+                    "epoch_seq_precision_train": seq_train_precision,
+                    "epoch_seq_recall_train": seq_train_recall,
+                    "epoch_seq_f1_train": seq_train_f1,
+                    "epoch_seq_f0.5_train": seq_train_f05,
+                    "epoch_seq_accuracy_train": seq_train_accuracy,
+                    "epoch_seq_precision_train": seq_train_precision,
+                    "epoch_seq_recall_train": seq_train_recall,
+                    "epoch_seq_f1_train": seq_train_f1,
+                    "epoch_seq_f0.5_train": seq_train_f05,
+                    "epoch_token_accuracy_train": token_train_accuracy,
+                    "epoch_token_precision_train": token_train_precision,
+                    "epoch_token_recall_train": token_train_recall,
+                    "epoch_token_f1_train": token_train_f1,
+                    "epoch_token_f0.5_train": token_train_f05,
+                    "epoch_token_accuracy_train": token_train_accuracy,
+                    "epoch_token_precision_train": token_train_precision,
+                    "epoch_token_recall_train": token_train_recall,
+                    "epoch_token_f1_train": token_train_f1,
+                    "epoch_token_f0.5_train": token_train_f05,
                     "epoch": epoch,
                 }
             )
@@ -294,64 +370,118 @@ def train(args):
         val_total_loss = 0
         val_batches = 0
 
-        val_true_positives = 0
-        val_false_positives = 0
-        val_true_negatives = 0
-        val_false_negatives = 0
+        val_seq_true_positives = 0
+        val_seq_false_positives = 0
+        val_seq_true_negatives = 0
+        val_seq_false_negatives = 0
+
+        val_token_true_positives = 0
+        val_token_false_positives = 0
+        val_token_true_negatives = 0
+        val_token_false_negatives = 0
 
         if args.use_wandb:
-            table = wandb.Table(columns=["Input Text", "Predicted Label", "True Label"])
+            if args.mlo_model:
+                table = wandb.Table(
+                    columns=[
+                        "Input Text",
+                        "Predicted Token Labels",
+                        "True Token Labels",
+                        "Predicted Label",
+                        "True Label",
+                    ]
+                )
+            else:
+                table = wandb.Table(
+                    columns=["Input Text", "Predicted Label", "True Label"]
+                )
 
         with torch.no_grad():
             for idx, (input_ids, attention_masks, labels, token_labels) in enumerate(
                 val_loader
             ):
+                # Gather input_ids, attention masks, sequence labels and token labels from batch
                 input_ids = input_ids.to(device)
                 attention_masks = attention_masks.to(device)
                 labels = torch.tensor(labels, dtype=torch.float, device=device)
+                token_labels = torch.tensor(
+                    token_labels, dtype=torch.float, device=device
+                )
 
+                # If using mlo model pass inputs and token labels through mlo model
                 if args.mlo_model:
-                    token_labels = torch.tensor(
-                        token_labels, dtype=torch.float, device=device
-                    )
                     outputs = model(
                         input_ids, attention_mask=attention_masks, labels=token_labels
                     )
                     loss = outputs["loss"]
-                    sequence_logits = outputs["sequence_logits"]
+                    seq_logits = outputs["sequence_logits"]
+                    token_logits = outputs["token_logits"]
+
+                # Otherwise pass inputs and sequence labels through basic pretrained model
                 else:
                     outputs = model(
                         input_ids, attention_mask=attention_masks, labels=labels
                     )
                     loss = outputs.loss
-                    sequence_logits = outputs.logits
+                    seq_logits = outputs.logits
 
-                preds = [1 if x > 0.5 else 0 for x in sequence_logits.view(-1)]
-                actuals = labels.detach().cpu().numpy()
+                # Calculate token prediction metrics
+                if args.mlo_model:
+                    token_preds = token_logits > 0.5
+                    token_actuals = token_labels
 
-                num_samples = len(actuals)
+                    masked_zeros = torch.where(
+                        token_actuals != -1,
+                        token_actuals,
+                        torch.zeros_like(token_actuals),
+                    )
+                    masked_ones = torch.where(
+                        token_actuals != -1,
+                        token_actuals,
+                        torch.ones_like(token_actuals),
+                    )
 
-                true_positives = 0
-                false_positives = 0
-                true_negatives = 0
-                false_negatives = 0
+                    token_true_positives = torch.sum(
+                        torch.logical_and(token_preds == 1, masked_zeros == 1)
+                    ).item()
+                    token_false_positives = torch.sum(
+                        torch.logical_and(token_preds == 1, masked_ones == 0)
+                    ).item()
+                    token_true_negatives = torch.sum(
+                        torch.logical_and(token_preds == 0, masked_ones == 0)
+                    ).item()
+                    token_false_negatives = torch.sum(
+                        torch.logical_and(token_preds == 0, masked_zeros == 1)
+                    ).item()
 
-                for i in range(num_samples):
-                    if actuals[i] == preds[i] == 1:
-                        true_positives += 1
-                    if preds[i] == 1 and actuals[i] != preds[i]:
-                        false_positives += 1
-                    if actuals[i] == preds[i] == 0:
-                        true_negatives += 1
-                    if preds[i] == 0 and actuals[i] != preds[i]:
-                        false_negatives += 1
+                    val_token_true_positives += token_true_positives
+                    val_token_false_positives += token_false_positives
+                    val_token_true_negatives += token_true_negatives
+                    val_token_false_negatives += token_false_negatives
 
-                val_true_positives += true_positives
-                val_false_positives += false_positives
-                val_true_negatives += true_negatives
-                val_false_negatives += false_negatives
+                # Calculate sequence prediction metrics
+                seq_preds = seq_logits.view(-1) > 0.5
+                seq_actuals = labels
 
-                val_samples += num_samples
+                seq_true_positives = torch.sum(
+                    torch.logical_and(seq_preds == 1, seq_actuals == 1)
+                ).item()
+                seq_false_positives = torch.sum(
+                    torch.logical_and(seq_preds == 1, seq_actuals == 0)
+                ).item()
+                seq_true_negatives = torch.sum(
+                    torch.logical_and(seq_preds == 0, seq_actuals == 0)
+                ).item()
+                seq_false_negatives = torch.sum(
+                    torch.logical_and(seq_preds == 0, seq_actuals == 1)
+                ).item()
+
+                val_seq_true_positives += seq_true_positives
+                val_seq_false_positives += seq_false_positives
+                val_seq_true_negatives += seq_true_negatives
+                val_seq_false_negatives += seq_false_negatives
+
+                val_samples += len(seq_preds)
                 val_total_loss += loss.item()
                 val_batches += 1
                 val_step += 1
@@ -388,35 +518,86 @@ def train(args):
                                 skip_special_tokens=True,
                                 clean_up_tokenization_spaces=True,
                             )
-                        true_label = actuals[i]
-                        pred_label = outputs.logits[i].detach().cpu().numpy()
-                        table.add_data(input_text, str(pred_label), str(true_label))
+                        true_label = seq_actuals[i][0]
+                        pred_label = seq_preds[i].item()
+
+                        true_token_labels = token_actuals[i][token_actuals[i] != -1]
+                        pred_token_labels = token_preds[i][token_actuals[i] != -1]
+
+                        if args.mlo_model:
+                            table.add_data(
+                                input_text,
+                                str(pred_label),
+                                str(true_label),
+                                str(pred_token_labels),
+                                str(true_token_labels),
+                            )
+                        else:
+                            table.add_data(input_text, str(pred_label), str(true_label))
 
         # Epoch time
         epoch_end = time.time()
         epoch_time = epoch_end - epoch_start
 
         # Calculate validation metrics
-        val_accuracy = (val_true_positives + val_true_negatives) / val_samples
-        val_precision = val_true_positives / (
-            val_true_positives + val_false_positives + 1e-5
+        seq_val_accuracy = (
+            val_seq_true_positives + val_seq_true_negatives
+        ) / val_samples
+        seq_val_precision = val_seq_true_positives / (
+            val_seq_true_positives + val_seq_false_positives + 1e-5
         )
-        val_recall = val_true_positives / (
-            val_true_positives + val_false_negatives + 1e-5
+        seq_val_recall = val_seq_true_positives / (
+            val_seq_true_positives + val_seq_false_negatives + 1e-5
         )
-        val_f1 = (2 * val_precision * val_recall) / (val_precision + val_recall + 1e-5)
+        seq_val_f1 = (2 * seq_val_precision * seq_val_recall) / (
+            seq_val_precision + seq_val_recall + 1e-5
+        )
+        seq_val_f05 = (1.25 * seq_val_precision * seq_val_recall) / (
+            0.25 * seq_val_precision + seq_val_recall + 1e-5
+        )
+
+        token_val_accuracy = (
+            val_token_true_positives + val_token_true_negatives
+        ) / val_samples
+        token_val_precision = val_token_true_positives / (
+            val_token_true_positives + val_token_false_positives + 1e-5
+        )
+        token_val_recall = val_token_true_positives / (
+            val_token_true_positives + val_token_false_negatives + 1e-5
+        )
+        token_val_f1 = (2 * token_val_precision * token_val_recall) / (
+            token_val_precision + token_val_recall + 1e-5
+        )
+        token_val_f05 = (1.25 * token_val_precision * token_val_recall) / (
+            0.25 * token_val_precision + token_val_recall + 1e-5
+        )
+
         val_av_loss = val_total_loss / val_batches
 
         if args.use_wandb:
             wandb.log(
                 {
-                    "examples_val": table,
                     "epoch_loss_val": val_av_loss,
-                    "epoch_accuracy_val": val_accuracy,
-                    "epoch_precision_val": val_precision,
-                    "epoch_recall_val": val_recall,
-                    "epoch_f1_val": val_f1,
-                    "epoch_time": epoch_time,
+                    "epoch_seq_accuracy_val": seq_val_accuracy,
+                    "epoch_seq_precision_val": seq_val_precision,
+                    "epoch_seq_recall_val": seq_val_recall,
+                    "epoch_seq_f1_val": seq_val_f1,
+                    "epoch_seq_f0.5_val": seq_val_f05,
+                    "epoch_seq_accuracy_val": seq_val_accuracy,
+                    "epoch_seq_precision_val": seq_val_precision,
+                    "epoch_seq_recall_val": seq_val_recall,
+                    "epoch_seq_f1_val": seq_val_f1,
+                    "epoch_seq_f0.5_val": seq_val_f05,
+                    "epoch_token_accuracy_val": token_val_accuracy,
+                    "epoch_token_precision_val": token_val_precision,
+                    "epoch_token_recall_val": token_val_recall,
+                    "epoch_token_f1_val": token_val_f1,
+                    "epoch_token_f0.5_val": token_val_f05,
+                    "epoch_token_accuracy_val": token_val_accuracy,
+                    "epoch_token_precision_val": token_val_precision,
+                    "epoch_token_recall_val": token_val_recall,
+                    "epoch_token_f1_val": token_val_f1,
+                    "epoch_token_f0.5_val": token_val_f05,
                     "epoch": epoch,
                 }
             )

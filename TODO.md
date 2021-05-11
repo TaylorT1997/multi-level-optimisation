@@ -17,14 +17,16 @@
 - [X] Get access to eval file from CoNLL-10 authors
 - [X] Implement early stopping
 - [X] Add regularisation losses
-- [ ] Add BERT losses
+- [X] Add BERT losses
 - [X] Run sentence classification on DeBERTa
 - [X] Add LR scheduler
-- [ ] State of the art comparison
+- [X] State of the art comparison
 - [ ] Start on background report
 - [X] Add quadratic soft attention
 - [ ] Add option for CRT
 - [X] Add config file
+- [ ] Evaluate models
+- [ ] Split wi locness to 80 20
 
 ## Low Priority
 
@@ -44,6 +46,8 @@
 - [ ] Add more schedulers and optimizers
 - [X] Apply mask to normalisation of attention
 - [X] Add option to use CLS token
+- [ ] Add F0.5 measure
+- [ ] Add token logging
 
 # Blockers
 
@@ -71,8 +75,10 @@
 - [X] How exactly should dev splits be used? What is the benefit? Do we train on train+dev?
 - [X] Which token labelling approach is preferrable? All or First?
 - [X] Can we completely ignore CLS and SEP tokens in sentence classification?
-- [ ] Could we do everything directly from BERT?
+- [X] Could we do everything directly from BERT?
 - [ ] Should we normalise the losses by batch size?
+- [ ] No toxic results?
+- [ ] What is F0.5?
 
 ## Low Priority
 
