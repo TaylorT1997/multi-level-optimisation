@@ -81,6 +81,14 @@ class TokenModel(nn.Module):
         token_attention_mask = torch.where(
             labels != -1, torch.ones_like(labels), torch.zeros_like(labels)
         )
+
+        if self.debug:
+            print(
+                "token_attention_mask shape: {}".format(
+                    token_attention_mask.shape
+                )
+            )
+
         masked_token_attention_output = torch.mul(
             token_attention_output, token_attention_mask
         )

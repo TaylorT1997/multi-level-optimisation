@@ -19,7 +19,7 @@ from transformers import (
     GPT2Tokenizer,
 )
 
-from data_loading.datasets import BinarySentenceTSVDataset, BinaryTokenTSVDataset
+from data_loading.datasets import BinaryTokenTSVDataset
 from models.model import TokenModel
 
 import wandb
@@ -128,12 +128,14 @@ def train(args):
 
     model.to(device)
 
+    # Define training and validaton datasets
     train_dataset = BinaryTokenTSVDataset(
         dataset_name=args.dataset,
         tokenizer=tokenizer,
         root_dir=args.root,
         mode="train",
         include_special_tokens=True,
+        max_length=512
     )
     val_dataset = BinaryTokenTSVDataset(
         dataset_name=args.dataset,
@@ -141,7 +143,10 @@ def train(args):
         root_dir=args.root,
         mode="dev",
         include_special_tokens=True,
+        max_length=512
     )
+
+
 
     train_loader = DataLoader(
         train_dataset, batch_size=args.batch_size, shuffle=True, collate_fn=collate_fn

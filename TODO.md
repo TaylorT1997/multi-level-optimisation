@@ -78,7 +78,8 @@
 - [X] Could we do everything directly from BERT?
 - [ ] Should we normalise the losses by batch size?
 - [ ] No toxic results?
-- [ ] What is F0.5?
+- [X] What is F0.5?
+- [ ] Can I know the max seq len of the validation set?
 
 ## Low Priority
 

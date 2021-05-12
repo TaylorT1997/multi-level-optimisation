@@ -1,6 +1,6 @@
 # Config settings for train.py
 
-root = "/home/taylort/Projects/multi-level-optimisation/"
+root = "/home/tom/Projects/multi-level-optimisation/"
 
 model = "bert-base-cased"
 tokenizer = "bert-base-cased"
@@ -25,4 +25,4 @@ token_supervision = true
 normalise_supervised_losses = true
 
 save_model = true
-use_wandb = false
+use_wandb = true
