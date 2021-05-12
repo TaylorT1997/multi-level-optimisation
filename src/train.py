@@ -4,6 +4,7 @@ import time
 import datetime
 import os
 import configargparse
+import math
 
 import torch
 import torch.optim as optim
@@ -135,18 +136,26 @@ def train(args):
         root_dir=args.root,
         mode="train",
         include_special_tokens=True,
-        max_length=512
-    )
-    val_dataset = BinaryTokenTSVDataset(
-        dataset_name=args.dataset,
-        tokenizer=tokenizer,
-        root_dir=args.root,
-        mode="dev",
-        include_special_tokens=True,
-        max_length=512
+        max_length=512,
     )
 
+    if "wi_locness" in args.dataset:
+        dataset_len = len(train_dataset)
+        num_train_samples = math.ceil(dataset_len * 0.8)
+        num_val_samples = math.floor(dataset_len * 0.2)
+        train_dataset, val_dataset = torch.utils.data.random_split(
+            train_dataset, [num_train_samples, num_val_samples]
+        )
 
+    else:
+        val_dataset = BinaryTokenTSVDataset(
+            dataset_name=args.dataset,
+            tokenizer=tokenizer,
+            root_dir=args.root,
+            mode="dev",
+            include_special_tokens=True,
+            max_length=512,
+        )
 
     train_loader = DataLoader(
         train_dataset, batch_size=args.batch_size, shuffle=True, collate_fn=collate_fn
@@ -613,22 +622,26 @@ def train(args):
             print("Training sequence precision: {:.2f}".format(seq_train_precision))
             print("Training sequence recall: {:.2f}".format(seq_train_recall))
             print("Training sequence f1: {:.2f}".format(seq_train_f1))
+            print("Training sequence f0.5: {:.2f}".format(seq_train_f05))
             print()
             print("Validation sequence accuracy: {:.2f}".format(seq_val_accuracy))
             print("Validation sequence precision: {:.2f}".format(seq_val_precision))
             print("Validation sequence recall: {:.2f}".format(seq_val_recall))
             print("Validation sequence f1: {:.2f}".format(seq_val_f1))
+            print("Validation sequence f0.5: {:.2f}".format(seq_val_f05))
             print()
             if args.mlo_model:
                 print("Training token accuracy: {:.2f}".format(token_train_accuracy))
                 print("Training token precision: {:.2f}".format(token_train_precision))
                 print("Training token recall: {:.2f}".format(token_train_recall))
                 print("Training token f1: {:.2f}".format(token_train_f1))
+                print("Training token f0.5: {:.2f}".format(token_train_f05))
                 print()
                 print("Validation token accuracy: {:.2f}".format(token_val_accuracy))
                 print("Validation token precision: {:.2f}".format(token_val_precision))
                 print("Validation token recall: {:.2f}".format(token_val_recall))
                 print("Validation token f1: {:.2f}".format(token_val_f1))
+                print("Validation token f0.5: {:.2f}".format(token_val_f05))
                 print()
 
             print("Epoch time: {:.0f}".format(epoch_time))
