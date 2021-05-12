@@ -8,7 +8,7 @@ mlo_model = true
 
 dataset = "conll_10"
 
-epochs = 11
+epochs = 25
 batch_size = 9
 learning_rate = 1e-6
 early_stopping_patience = 7
@@ -25,4 +25,4 @@ token_supervision = true
 normalise_supervised_losses = true
 
 save_model = true
-use_wandb = false
+use_wandb = true
