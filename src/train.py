@@ -136,7 +136,7 @@ def train(args):
         root_dir=args.root,
         mode="train",
         include_special_tokens=True,
-        max_length=args.max_seq_length
+        max_length=args.max_seq_length,
     )
     val_dataset = BinaryTokenTSVDataset(
         dataset_name=args.dataset,
@@ -144,7 +144,7 @@ def train(args):
         root_dir=args.root,
         mode="dev",
         include_special_tokens=True,
-        max_length=args.max_seq_length
+        max_length=args.max_seq_length,
     )
 
     if "wi_locness" in args.dataset:
@@ -174,11 +174,26 @@ def train(args):
 
     # Optimizer and scheduler
     if args.lr_optimizer == "adamw":
-        optimizer = optim.AdamW(model.parameters(), lr=args.learning_rate, eps=args.lr_epsilon, weight_decay=args.lr_weight_decay)
+        optimizer = optim.AdamW(
+            model.parameters(),
+            lr=args.learning_rate,
+            eps=args.lr_epsilon,
+            weight_decay=args.lr_weight_decay,
+        )
     elif args.lr_optimizer == "adam":
-        optimizer = optim.Adam(model.parameters(), lr=args.learning_rate, eps=args.lr_epsilon, weight_decay=args.lr_weight_decay)
+        optimizer = optim.Adam(
+            model.parameters(),
+            lr=args.learning_rate,
+            eps=args.lr_epsilon,
+            weight_decay=args.lr_weight_decay,
+        )
     elif args.lr_optimizer == "sgd":
-        optimizer = optim.SGD(model.parameters(), lr=args.learning_rate, momentum=args.lr_momentum, weight_decay=args.lr_weight_decay)
+        optimizer = optim.SGD(
+            model.parameters(),
+            lr=args.learning_rate,
+            momentum=args.lr_momentum,
+            weight_decay=args.lr_weight_decay,
+        )
 
     if args.lr_scheduler == "steplr":
         scheduler = optim.lr_scheduler.StepLR(
@@ -324,6 +339,29 @@ def train(args):
             train_batches += 1
             train_step += 1
 
+            print("metrics")
+            print(train_token_true_positives)
+            print(train_token_false_positives)
+            print(train_token_true_negatives)
+            print(train_token_false_negatives)
+            print()
+
+            token_train_precision = train_token_true_positives / (
+                train_token_true_positives + train_token_false_positives + 1e-5
+            )
+            token_train_recall = train_token_true_positives / (
+                train_token_true_positives + train_token_false_negatives + 1e-5
+            )
+            token_train_f1 = (2 * token_train_precision * token_train_recall) / (
+                token_train_precision + token_train_recall + 1e-5
+            )
+            print(token_train_precision)
+            print(token_train_recall)
+            print(token_train_f1)
+            print()
+
+            # sys.exit()
+
             if args.use_wandb:
                 wandb.log({"step_loss_train": loss.item(), "train_step": train_step})
 
@@ -346,7 +384,12 @@ def train(args):
 
         token_train_accuracy = (
             train_token_true_positives + train_token_true_negatives
-        ) / (train_token_true_positives + train_token_false_positives + train_token_true_negatives + train_token_false_negatives)
+        ) / (
+            train_token_true_positives
+            + train_token_false_positives
+            + train_token_true_negatives
+            + train_token_false_negatives
+        )
         token_train_precision = train_token_true_positives / (
             train_token_true_positives + train_token_false_positives + 1e-5
         )
@@ -572,9 +615,12 @@ def train(args):
             0.25 * seq_val_precision + seq_val_recall + 1e-5
         )
 
-        token_val_accuracy = (
-            val_token_true_positives + val_token_true_negatives
-        ) / (val_token_true_positives + val_token_false_positives + val_token_true_negatives + val_token_false_negatives)
+        token_val_accuracy = (val_token_true_positives + val_token_true_negatives) / (
+            val_token_true_positives
+            + val_token_false_positives
+            + val_token_true_negatives
+            + val_token_false_negatives
+        )
         token_val_precision = val_token_true_positives / (
             val_token_true_positives + val_token_false_positives + 1e-5
         )
@@ -791,11 +837,17 @@ def train(args):
 if __name__ == "__main__":
     # parser = argparse.ArgumentParser(description="Train model")
     parser = configargparse.ArgParser(
-        default_config_files=["/home/taylort/Projects/multi-level-optimisation/config.txt"]
+        default_config_files=[
+            "/home/taylort/Projects/multi-level-optimisation/config.txt"
+        ]
     )
 
     parser.add(
-        "-c", "--config", is_config_file=True, default="/home/taylort/Projects/multi-level-optimisation/config.txt", help="Config file path"
+        "-c",
+        "--config",
+        is_config_file=True,
+        default="/home/taylort/Projects/multi-level-optimisation/config.txt",
+        help="Config file path",
     )
 
     parser.add(

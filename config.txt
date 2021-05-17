@@ -18,6 +18,7 @@ lr_optimizer = adam
 lr_epsilon = 1e-7
 lr_momentum = 0.9
 lr_weight_decay = 0.1
+
 lr_scheduler = steplr
 lr_scheduler_step = 5
 lr_scheduler_gamma = 0.1

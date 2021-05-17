@@ -8,11 +8,17 @@ mlo_model = true
 
 dataset = "conll_10"
 
-epochs = 11
-batch_size = 9
+epochs = 5
+batch_size = 2
+max_seq_length = 4
 learning_rate = 1e-6
 early_stopping_patience = 7
-lr_optimizer = adamw
+
+lr_optimizer = sgd
+lr_epsilon = 1e-7
+lr_momentum = 0.9
+lr_weight_decay = 0.1
+
 lr_scheduler = steplr
 lr_scheduler_step = 5
 lr_scheduler_gamma = 0.1
@@ -20,9 +26,9 @@ lr_scheduler_gamma = 0.1
 soft_attention_beta = 1
 sentence_loss_weight = 1
 token_loss_weight = 1
-regularizer_loss_weight = 0.01
+regularizer_loss_weight = 0.1
 token_supervision = true
-normalise_supervised_losses = true
+normalise_supervised_losses = false
 
-save_model = true
-use_wandb = true
+save_model = false
+use_wandb = false

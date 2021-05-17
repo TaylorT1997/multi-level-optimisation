@@ -83,11 +83,7 @@ class TokenModel(nn.Module):
         )
 
         if self.debug:
-            print(
-                "token_attention_mask shape: {}".format(
-                    token_attention_mask.shape
-                )
-            )
+            print("token_attention_mask shape: {}".format(token_attention_mask.shape))
 
         masked_token_attention_output = torch.mul(
             token_attention_output, token_attention_mask
@@ -223,10 +219,10 @@ class TokenModel(nn.Module):
         )
 
         if self.debug:
-            print(sentence_loss)
-            print(token_loss)
-            print(regularizer_loss_a)
-            print(regularizer_loss_b)
+            print("sentence_loss: {}".format(sentence_loss))
+            print("token_loss: {}".format(token_loss))
+            print("regularizer_loss_a: {}".format(regularizer_loss_a))
+            print("regularizer_loss_b: {}".format(regularizer_loss_b))
 
         # Combine regularize losses and (optionally) normalise
         regularizer_losses = regularizer_loss_a + regularizer_loss_b
