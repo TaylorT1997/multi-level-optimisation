@@ -88,11 +88,11 @@ class BinaryTokenTSVDataset(Dataset):
             token_labels.insert(0, sentence_label)
             token_labels.append(sentence_label)
             token_labels.extend([-1] * (self.max_length - len(token_labels)))
-            token_labels = token_labels[:512]
+            token_labels = token_labels[:self.max_length]
         else:
             token_labels.insert(0, -1)
             token_labels.extend([-1] * (self.max_length - len(token_labels)))
-            token_labels = token_labels[:512]
+            token_labels = token_labels[:self.max_length]
 
         return encoded_sequence, sentence_label, token_labels
 

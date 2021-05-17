@@ -135,7 +135,7 @@ def train(args):
         root_dir=args.root,
         mode="train",
         include_special_tokens=True,
-        max_length=512
+        max_length=args.max_seq_length
     )
     val_dataset = BinaryTokenTSVDataset(
         dataset_name=args.dataset,
@@ -143,7 +143,7 @@ def train(args):
         root_dir=args.root,
         mode="dev",
         include_special_tokens=True,
-        max_length=512
+        max_length=args.max_seq_length
     )
 
 
@@ -157,7 +157,11 @@ def train(args):
 
     # Optimizer and scheduler
     if args.lr_optimizer == "adamw":
-        optimizer = optim.AdamW(model.parameters(), lr=args.learning_rate)
+        optimizer = optim.AdamW(model.parameters(), lr=args.learning_rate, eps=args.lr_epsilon, weight_decay=args.lr_weight_decay)
+    elif args.lr_optimizer == "adam":
+        optimizer = optim.Adam(model.parameters(), lr=args.learning_rate, eps=args.lr_epsilon, weight_decay=args.lr_weight_decay)
+    elif args.lr_optimizer == "sgd":
+        optimizer = optim.SGD(model.parameters(), lr=args.learning_rate, momentum=args.lr_momentum, weight_decay=args.lr_weight_decay)
 
     if args.lr_scheduler == "steplr":
         scheduler = optim.lr_scheduler.StepLR(
@@ -325,7 +329,7 @@ def train(args):
 
         token_train_accuracy = (
             train_token_true_positives + train_token_true_negatives
-        ) / train_samples
+        ) / (train_token_true_positives + train_token_false_positives + train_token_true_negatives + train_token_false_negatives)
         token_train_precision = train_token_true_positives / (
             train_token_true_positives + train_token_false_positives + 1e-5
         )
@@ -553,7 +557,7 @@ def train(args):
 
         token_val_accuracy = (
             val_token_true_positives + val_token_true_negatives
-        ) / val_samples
+        ) / (val_token_true_positives + val_token_false_positives + val_token_true_negatives + val_token_false_negatives)
         token_val_precision = val_token_true_positives / (
             val_token_true_positives + val_token_false_positives + 1e-5
         )
@@ -766,11 +770,11 @@ def train(args):
 if __name__ == "__main__":
     # parser = argparse.ArgumentParser(description="Train model")
     parser = configargparse.ArgParser(
-        default_config_files=["/home/tom/Projects/multi-level-optimisation/config.txt"]
+        default_config_files=["/home/taylort/Projects/multi-level-optimisation/config.txt"]
     )
 
     parser.add(
-        "-c", "--config", required=True, is_config_file=True, help="Config file path"
+        "-c", "--config", is_config_file=True, default="/home/taylort/Projects/multi-level-optimisation/config.txt", help="Config file path"
     )
 
     parser.add(
@@ -896,8 +900,8 @@ if __name__ == "__main__":
         "--lr_scheduler_gamma",
         action="store",
         type=float,
-        default=0.1,
-        help="Scheduler gamma (default: 0.1)",
+        default=1,
+        help="Scheduler gamma (default: 1)",
     )
 
     parser.add(
@@ -951,6 +955,38 @@ if __name__ == "__main__":
         action="store_true",
         default=False,
         help="Normalise regularisation losses (default: False)",
+    )
+
+    parser.add(
+        "--lr_epsilon",
+        action="store",
+        type=float,
+        default=1e-7,
+        help="Learning rate epsilon (default: 1e-7)",
+    )
+
+    parser.add(
+        "--lr_weight_decay",
+        action="store",
+        type=float,
+        default=0.1,
+        help="Learning rate weight decay (default: 0.1)",
+    )
+
+    parser.add(
+        "--max_seq_length",
+        action="store",
+        type=int,
+        default=128,
+        help="Maximum sequence length (default: 128)",
+    )
+
+    parser.add(
+        "--lr_momentum",
+        action="store",
+        type=float,
+        default=0.9,
+        help="Learning rate momentum (default: 0.9)",
     )
 
     args = parser.parse_args()

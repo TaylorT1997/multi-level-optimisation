@@ -1,0 +1,67 @@
+program: train.py
+method: bayes
+metric:
+  name: epoch_loss_val
+  goal: minimize
+parameters:
+  root:
+    distribution: constant
+    value: /home/taylort/Projects/multi-level-optimisation/
+  model:
+    distribution: constant
+    value: bert-base-cased
+  epochs:
+    distribution: constant
+    value: 25
+  # silent:
+  #   distribution: constant
+  #   value: "false"
+  dataset:
+    distribution: constant
+    value: conll_10
+  tokenizer:
+    distribution: constant
+    value: bert-base-cased
+  # use_wandb:
+  #   distribution: constant
+  #   value: "true"
+  batch_size:
+    distribution: constant
+    value: 16
+  learning_rate:
+    distribution: uniform
+    min: 1e-8
+    max: 1e-3
+  # mlo_model:
+  #   distribution: constant
+  #   value: "true"
+  # save_model:
+  #   distribution: constant
+  #   value: "true"
+  lr_optimizer:
+    distribution: categorical
+    values:
+      - adam
+      - adamw
+      - sgd
+  lr_momentum:
+    min: 0
+    max: 0.99
+  lr_weight_decay:
+    min: 0
+    max: 0.5
+  lr_scheduler:
+    distribution: categorical
+    values:
+      - steplr
+  lr_scheduler_step:
+    distribution: int_uniform
+    min: 1
+    max: 10
+  lr_scheduler_gamma:
+    distribution: uniform
+    min: 0.05
+    max: 1.0
+  early_stopping_patience:
+    distribution: constant
+    value: 3

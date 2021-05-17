@@ -76,10 +76,11 @@
 - [X] Which token labelling approach is preferrable? All or First?
 - [X] Can we completely ignore CLS and SEP tokens in sentence classification?
 - [X] Could we do everything directly from BERT?
-- [ ] Should we normalise the losses by batch size?
-- [ ] No toxic results?
+- [X] Should we normalise the losses by batch size?
+- [X] No toxic results?
 - [X] What is F0.5?
 - [ ] Can I know the max seq len of the validation set?
+- [ ] Can I directly optimise for f1?
 
 ## Low Priority
 
