@@ -339,13 +339,6 @@ def train(args):
             train_batches += 1
             train_step += 1
 
-            print("metrics")
-            print(train_token_true_positives)
-            print(train_token_false_positives)
-            print(train_token_true_negatives)
-            print(train_token_false_negatives)
-            print()
-
             token_train_precision = train_token_true_positives / (
                 train_token_true_positives + train_token_false_positives + 1e-5
             )
@@ -355,12 +348,6 @@ def train(args):
             token_train_f1 = (2 * token_train_precision * token_train_recall) / (
                 token_train_precision + token_train_recall + 1e-5
             )
-            print(token_train_precision)
-            print(token_train_recall)
-            print(token_train_f1)
-            print()
-
-            # sys.exit()
 
             if args.use_wandb:
                 wandb.log({"step_loss_train": loss.item(), "train_step": train_step})
@@ -645,16 +632,6 @@ def train(args):
                     "epoch_seq_recall_val": seq_val_recall,
                     "epoch_seq_f1_val": seq_val_f1,
                     "epoch_seq_f0.5_val": seq_val_f05,
-                    "epoch_seq_accuracy_val": seq_val_accuracy,
-                    "epoch_seq_precision_val": seq_val_precision,
-                    "epoch_seq_recall_val": seq_val_recall,
-                    "epoch_seq_f1_val": seq_val_f1,
-                    "epoch_seq_f0.5_val": seq_val_f05,
-                    "epoch_token_accuracy_val": token_val_accuracy,
-                    "epoch_token_precision_val": token_val_precision,
-                    "epoch_token_recall_val": token_val_recall,
-                    "epoch_token_f1_val": token_val_f1,
-                    "epoch_token_f0.5_val": token_val_f05,
                     "epoch_token_accuracy_val": token_val_accuracy,
                     "epoch_token_precision_val": token_val_precision,
                     "epoch_token_recall_val": token_val_recall,
@@ -676,30 +653,30 @@ def train(args):
             print("Training loss: {:.4f}".format(train_av_loss))
             print("Validation loss: {:.4f}".format(val_av_loss))
             print()
-            print("Training sequence accuracy: {:.2f}".format(seq_train_accuracy))
-            print("Training sequence precision: {:.2f}".format(seq_train_precision))
-            print("Training sequence recall: {:.2f}".format(seq_train_recall))
-            print("Training sequence f1: {:.2f}".format(seq_train_f1))
-            print("Training sequence f0.5: {:.2f}".format(seq_train_f05))
+            print("Training sequence accuracy: {:.4f}".format(seq_train_accuracy))
+            print("Training sequence precision: {:.4f}".format(seq_train_precision))
+            print("Training sequence recall: {:.4f}".format(seq_train_recall))
+            print("Training sequence f1: {:.4f}".format(seq_train_f1))
+            print("Training sequence f0.5: {:.4f}".format(seq_train_f05))
             print()
-            print("Validation sequence accuracy: {:.2f}".format(seq_val_accuracy))
-            print("Validation sequence precision: {:.2f}".format(seq_val_precision))
-            print("Validation sequence recall: {:.2f}".format(seq_val_recall))
-            print("Validation sequence f1: {:.2f}".format(seq_val_f1))
-            print("Validation sequence f0.5: {:.2f}".format(seq_val_f05))
+            print("Validation sequence accuracy: {:.4f}".format(seq_val_accuracy))
+            print("Validation sequence precision: {:.4f}".format(seq_val_precision))
+            print("Validation sequence recall: {:.4f}".format(seq_val_recall))
+            print("Validation sequence f1: {:.4f}".format(seq_val_f1))
+            print("Validation sequence f0.5: {:.4f}".format(seq_val_f05))
             print()
             if args.mlo_model:
-                print("Training token accuracy: {:.2f}".format(token_train_accuracy))
-                print("Training token precision: {:.2f}".format(token_train_precision))
-                print("Training token recall: {:.2f}".format(token_train_recall))
-                print("Training token f1: {:.2f}".format(token_train_f1))
-                print("Training token f0.5: {:.2f}".format(token_train_f05))
+                print("Training token accuracy: {:.4f}".format(token_train_accuracy))
+                print("Training token precision: {:.4f}".format(token_train_precision))
+                print("Training token recall: {:.4f}".format(token_train_recall))
+                print("Training token f1: {:.4f}".format(token_train_f1))
+                print("Training token f0.5: {:.4f}".format(token_train_f05))
                 print()
-                print("Validation token accuracy: {:.2f}".format(token_val_accuracy))
-                print("Validation token precision: {:.2f}".format(token_val_precision))
-                print("Validation token recall: {:.2f}".format(token_val_recall))
-                print("Validation token f1: {:.2f}".format(token_val_f1))
-                print("Validation token f0.5: {:.2f}".format(token_val_f05))
+                print("Validation token accuracy: {:.4f}".format(token_val_accuracy))
+                print("Validation token precision: {:.4f}".format(token_val_precision))
+                print("Validation token recall: {:.4f}".format(token_val_recall))
+                print("Validation token f1: {:.4f}".format(token_val_f1))
+                print("Validation token f0.5: {:.4f}".format(token_val_f05))
                 print()
 
             print("Epoch time: {:.0f}".format(epoch_time))
@@ -790,46 +767,46 @@ def train(args):
         print("Best training loss: {:.4f}".format(best_train_loss))
         print("Best validation loss: {:.4f}".format(best_val_loss))
         print()
-        print("Best training sequence accuracy: {:.2f}".format(best_seq_train_accuracy))
+        print("Best training sequence accuracy: {:.4f}".format(best_seq_train_accuracy))
         print(
-            "Best training sequence precision: {:.2f}".format(best_seq_train_precision)
+            "Best training sequence precision: {:.4f}".format(best_seq_train_precision)
         )
-        print("Best training sequence recall: {:.2f}".format(best_seq_train_recall))
-        print("Best training sequence f1: {:.2f}".format(best_seq_train_f1))
-        print("Best training sequence f0.5: {:.2f}".format(best_seq_train_f05))
+        print("Best training sequence recall: {:.4f}".format(best_seq_train_recall))
+        print("Best training sequence f1: {:.4f}".format(best_seq_train_f1))
+        print("Best training sequence f0.5: {:.4f}".format(best_seq_train_f05))
         print()
-        print("Best validation sequence accuracy: {:.2f}".format(best_seq_val_accuracy))
+        print("Best validation sequence accuracy: {:.4f}".format(best_seq_val_accuracy))
         print(
-            "Best validation sequence precision: {:.2f}".format(best_seq_val_precision)
+            "Best validation sequence precision: {:.4f}".format(best_seq_val_precision)
         )
-        print("Best validation sequence recall: {:.2f}".format(best_seq_val_recall))
-        print("Best validation sequence f1: {:.2f}".format(best_seq_val_f1))
-        print("Best validation sequence f0.5: {:.2f}".format(best_seq_val_f05))
+        print("Best validation sequence recall: {:.4f}".format(best_seq_val_recall))
+        print("Best validation sequence f1: {:.4f}".format(best_seq_val_f1))
+        print("Best validation sequence f0.5: {:.4f}".format(best_seq_val_f05))
         print()
         if args.mlo_model:
             print(
-                "Best training token accuracy: {:.2f}".format(best_token_train_accuracy)
+                "Best training token accuracy: {:.4f}".format(best_token_train_accuracy)
             )
             print(
-                "Best training token precision: {:.2f}".format(
+                "Best training token precision: {:.4f}".format(
                     best_token_train_precision
                 )
             )
-            print("Best training token recall: {:.2f}".format(best_token_train_recall))
-            print("Best training token f1: {:.2f}".format(best_token_train_f1))
-            print("Best training token f0.5: {:.2f}".format(best_token_train_f05))
+            print("Best training token recall: {:.4f}".format(best_token_train_recall))
+            print("Best training token f1: {:.4f}".format(best_token_train_f1))
+            print("Best training token f0.5: {:.4f}".format(best_token_train_f05))
             print()
             print(
-                "Best validation token accuracy: {:.2f}".format(best_token_val_accuracy)
+                "Best validation token accuracy: {:.4f}".format(best_token_val_accuracy)
             )
             print(
-                "Best validation token precision: {:.2f}".format(
+                "Best validation token precision: {:.4f}".format(
                     best_token_val_precision
                 )
             )
-            print("Best validation token recall: {:.2f}".format(best_token_val_recall))
-            print("Best validation token f1: {:.2f}".format(best_token_val_f1))
-            print("Best validation token f0.5: {:.2f}".format(best_token_val_f05))
+            print("Best validation token recall: {:.4f}".format(best_token_val_recall))
+            print("Best validation token f1: {:.4f}".format(best_token_val_f1))
+            print("Best validation token f0.5: {:.4f}".format(best_token_val_f05))
             print()
         print("Training time: {:.0f}".format(training_time))
 
