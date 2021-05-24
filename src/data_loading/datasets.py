@@ -8,6 +8,7 @@ from torch.utils.data import Dataset
 
 from transformers import BertTokenizer
 
+
 class BinaryTokenTSVDataset(Dataset):
     def __init__(
         self,
@@ -76,23 +77,28 @@ class BinaryTokenTSVDataset(Dataset):
         sentence_label = self.sentence_label[idx]
         token_labels = self.token_labels[idx]
 
-        encoded_sequence = self.tokenizer.encode_plus(
-            sequence,
-            padding="max_length",
-            truncation=True,
-            max_length=self.max_length,
-            return_tensors="pt",
-        )
+        # encoded_sequence = self.tokenizer.encode_plus(
+        #     sequence,
+        #     padding="max_length",
+        #     truncation=True,
+        #     max_length=self.max_length,
+        #     return_tensors="pt",
+        # )
+
+        encoded_sequence = sequence
 
         if self.include_special_tokens:
             token_labels.insert(0, sentence_label)
             token_labels.append(sentence_label)
-            token_labels.extend([-1] * (self.max_length - len(token_labels)))
-            token_labels = token_labels[:self.max_length]
+            # token_labels.extend([-1] * (self.max_length - len(token_labels)))
+            # token_labels = token_labels[: self.max_length]
         else:
             token_labels.insert(0, -1)
-            token_labels.extend([-1] * (self.max_length - len(token_labels)))
-            token_labels = token_labels[:self.max_length]
+            token_labels.append(-1)
+            # token_labels.extend([-1] * (self.max_length - len(token_labels)))
+            # token_labels = token_labels[: self.max_length]
+
+        print(token_labels)
 
         return encoded_sequence, sentence_label, token_labels
 

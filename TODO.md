@@ -79,8 +79,8 @@
 - [X] Should we normalise the losses by batch size?
 - [X] No toxic results?
 - [X] What is F0.5?
-- [ ] Can I know the max seq len of the validation set?
-- [ ] Can I directly optimise for f1?
+- [X] Can I know the max seq len of the validation set?
+- [X] Can I directly optimise for f1?
 
 ## Low Priority
 

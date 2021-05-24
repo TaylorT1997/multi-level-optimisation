@@ -26,16 +26,25 @@ from models.model import TokenModel
 import wandb
 
 
+# def collate_fn(batch):
+#     input_ids, attention_masks, labels, token_labels = [], [], [], []
+#     for data_dict, label, token_label in batch:
+#         input_ids.append(data_dict["input_ids"])
+#         attention_masks.append(data_dict["attention_mask"])
+#         labels.append(label)
+#         token_labels.append(token_label)
+#     input_ids = torch.cat(input_ids)
+#     attention_masks = torch.cat(attention_masks)
+#     return input_ids, attention_masks, labels, token_labels
+
+
 def collate_fn(batch):
-    input_ids, attention_masks, labels, token_labels = [], [], [], []
-    for data_dict, label, token_label in batch:
-        input_ids.append(data_dict["input_ids"])
-        attention_masks.append(data_dict["attention_mask"])
+    sequences, labels, token_labels = [], [], []
+    for sequence, label, token_label in batch:
+        sequences.append(sequence)
         labels.append(label)
         token_labels.append(token_label)
-    input_ids = torch.cat(input_ids)
-    attention_masks = torch.cat(attention_masks)
-    return input_ids, attention_masks, labels, token_labels
+    return sequences, labels, token_labels
 
 
 def train(args):
@@ -135,7 +144,7 @@ def train(args):
         tokenizer=tokenizer,
         root_dir=args.root,
         mode="train",
-        include_special_tokens=True,
+        include_special_tokens=False,
         max_length=args.max_seq_length,
     )
     val_dataset = BinaryTokenTSVDataset(
@@ -143,7 +152,7 @@ def train(args):
         tokenizer=tokenizer,
         root_dir=args.root,
         mode="dev",
-        include_special_tokens=True,
+        include_special_tokens=False,
         max_length=args.max_seq_length,
     )
 
@@ -161,7 +170,7 @@ def train(args):
             tokenizer=tokenizer,
             root_dir=args.root,
             mode="dev",
-            include_special_tokens=True,
+            include_special_tokens=False,
             max_length=512,
         )
 
@@ -249,17 +258,39 @@ def train(args):
         train_token_true_negatives = 0
         train_token_false_negatives = 0
 
-        for idx, (input_ids, attention_masks, labels, token_labels) in enumerate(
-            train_loader
-        ):
+        for idx, (sequences, labels, token_labels) in enumerate(train_loader):
             # Zero any accumulated gradients
             optimizer.zero_grad()
 
+            decoded = tokenizer.batch_decode(sequences)
+
+            encoded_sequence = tokenizer(
+                decoded, padding=True, truncation=True, return_tensors="pt",
+            )
+
+            input_ids = encoded_sequence["input_ids"].to(device)
+            attention_masks = encoded_sequence["attention_mask"].to(device)
+
+            # Pad token labels
+            max_length = 0
+            for seq in encoded_sequence["input_ids"]:
+                if len(seq) > max_length:
+                    max_length = len(seq)
+
+            for i in range(len(token_labels)):
+                token_labels[i].extend([-1] * (max_length - len(token_labels[i])))
+                token_labels[i] = token_labels[i][:max_length]
+
             # Gather input_ids, attention masks, sequence labels and token labels from batch
-            input_ids = input_ids.to(device)
-            attention_masks = attention_masks.to(device)
+            # input_ids = input_ids.to(device)
+            # attention_masks = attention_masks.to(device)
             labels = torch.tensor(labels, dtype=torch.float, device=device)
             token_labels = torch.tensor(token_labels, dtype=torch.float, device=device)
+
+            print(input_ids.shape)
+            print(attention_masks.shape)
+            print(labels.shape)
+            print(token_labels.shape)
 
             # If using mlo model pass inputs and token labels through mlo model
             if args.mlo_model:
