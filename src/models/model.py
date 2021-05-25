@@ -138,12 +138,22 @@ class TokenModel(nn.Module):
             )
 
         # Calculate the model loss
-        model_loss = self._calculate_loss(
+        (
+            model_loss,
+            sentence_loss,
+            token_loss,
+            regularizer_loss_a,
+            regularizer_loss_b,
+        ) = self._calculate_loss(
             masked_token_attention_output, sentence_classification_output, labels
         )
 
         output = {
             "loss": model_loss,
+            "sentence_loss": sentence_loss,
+            "token_loss": token_loss,
+            "regularizer_loss_a": regularizer_loss_a,
+            "regularizer_loss_b": regularizer_loss_b,
             "token_embeddings": pretrained_output.last_hidden_state,
             "token_logits": masked_token_attention_output,
             "sequence_logits": sentence_classification_output,
@@ -242,4 +252,11 @@ class TokenModel(nn.Module):
         else:
             total_loss = sentence_loss_weighted + regularizer_loss_weighted
 
-        return total_loss
+        return (
+            total_loss,
+            sentence_loss,
+            token_loss,
+            regularizer_loss_a,
+            regularizer_loss_b,
+        )
+

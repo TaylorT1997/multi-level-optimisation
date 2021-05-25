@@ -287,17 +287,16 @@ def train(args):
             labels = torch.tensor(labels, dtype=torch.float, device=device)
             token_labels = torch.tensor(token_labels, dtype=torch.float, device=device)
 
-            print(input_ids.shape)
-            print(attention_masks.shape)
-            print(labels.shape)
-            print(token_labels.shape)
-
             # If using mlo model pass inputs and token labels through mlo model
             if args.mlo_model:
                 outputs = model(
                     input_ids, attention_mask=attention_masks, labels=token_labels
                 )
                 loss = outputs["loss"]
+                sentence_loss = outputs["sentence_loss"]
+                token_loss = outputs["token_loss"]
+                regularizer_loss_a = outputs["regularizer_loss_a"]
+                regularizer_loss_b = outputs["regularizer_loss_b"]
                 seq_logits = outputs["sequence_logits"]
                 token_logits = outputs["token_logits"]
 
@@ -381,7 +380,16 @@ def train(args):
             )
 
             if args.use_wandb:
-                wandb.log({"step_loss_train": loss.item(), "train_step": train_step})
+                wandb.log(
+                    {
+                        "step_loss_train": loss.item(),
+                        "sentence_loss": sentence_loss.item(),
+                        "token_loss": token_loss.item(),
+                        "regularizer_loss_a": regularizer_loss_a.item(),
+                        "regularizer_loss_b": regularizer_loss_b.item(),
+                        "train_step": train_step,
+                    }
+                )
 
         # Calculate training metrics
         seq_train_accuracy = (
