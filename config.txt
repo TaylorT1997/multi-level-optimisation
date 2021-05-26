@@ -26,9 +26,10 @@ lr_scheduler_gamma = 0.1
 soft_attention_beta = 1
 sentence_loss_weight = 1
 token_loss_weight = 1
-regularizer_loss_weight = 0.01
+regularizer_loss_weight = 0.1
 token_supervision = true
 normalise_supervised_losses = true
+normalise_regularization_losses = true
 
 save_model = true
 use_wandb = true

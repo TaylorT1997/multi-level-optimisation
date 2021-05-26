@@ -98,8 +98,6 @@ class BinaryTokenTSVDataset(Dataset):
             # token_labels.extend([-1] * (self.max_length - len(token_labels)))
             # token_labels = token_labels[: self.max_length]
 
-        print(token_labels)
-
         return encoded_sequence, sentence_label, token_labels
 
     def _get_samples_labels(self, tsv_file):

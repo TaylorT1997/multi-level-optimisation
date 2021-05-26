@@ -262,18 +262,15 @@ def train(args):
             # Zero any accumulated gradients
             optimizer.zero_grad()
 
+            # Batch decode and encode to get correct padding for the batch
             decoded = tokenizer.batch_decode(sequences)
-
-            encoded_sequence = tokenizer(
+            encoded_sequences = tokenizer(
                 decoded, padding=True, truncation=True, return_tensors="pt",
             )
 
-            input_ids = encoded_sequence["input_ids"].to(device)
-            attention_masks = encoded_sequence["attention_mask"].to(device)
-
             # Pad token labels
             max_length = 0
-            for seq in encoded_sequence["input_ids"]:
+            for seq in encoded_sequences["input_ids"]:
                 if len(seq) > max_length:
                     max_length = len(seq)
 
@@ -282,8 +279,8 @@ def train(args):
                 token_labels[i] = token_labels[i][:max_length]
 
             # Gather input_ids, attention masks, sequence labels and token labels from batch
-            # input_ids = input_ids.to(device)
-            # attention_masks = attention_masks.to(device)
+            input_ids = encoded_sequences["input_ids"].to(device)
+            attention_masks = encoded_sequences["attention_mask"].to(device)
             labels = torch.tensor(labels, dtype=torch.float, device=device)
             token_labels = torch.tensor(token_labels, dtype=torch.float, device=device)
 
@@ -383,10 +380,10 @@ def train(args):
                 wandb.log(
                     {
                         "step_loss_train": loss.item(),
-                        "sentence_loss": sentence_loss.item(),
-                        "token_loss": token_loss.item(),
-                        "regularizer_loss_a": regularizer_loss_a.item(),
-                        "regularizer_loss_b": regularizer_loss_b.item(),
+                        "sentence_loss_train": sentence_loss.item(),
+                        "token_loss_train": token_loss.item(),
+                        "regularizer_loss_a_train": regularizer_loss_a.item(),
+                        "regularizer_loss_b_train": regularizer_loss_b.item(),
                         "train_step": train_step,
                     }
                 )
@@ -482,16 +479,31 @@ def train(args):
                 )
 
         with torch.no_grad():
-            for idx, (input_ids, attention_masks, labels, token_labels) in enumerate(
-                val_loader
-            ):
-                # Gather input_ids, attention masks, sequence labels and token labels from batch
-                input_ids = input_ids.to(device)
-                attention_masks = attention_masks.to(device)
-                labels = torch.tensor(labels, dtype=torch.float, device=device)
-                token_labels = torch.tensor(
-                    token_labels, dtype=torch.float, device=device
+            for idx, (sequences, labels, token_labels) in enumerate(val_loader):
+                # Zero any accumulated gradients
+                optimizer.zero_grad()
+
+                # Batch decode and encode to get correct padding for the batch
+                decoded = tokenizer.batch_decode(sequences)
+                encoded_sequences = tokenizer(
+                    decoded, padding=True, truncation=True, return_tensors="pt",
                 )
+
+                # Pad token labels
+                max_length = 0
+                for seq in encoded_sequences["input_ids"]:
+                    if len(seq) > max_length:
+                        max_length = len(seq)
+
+                for i in range(len(token_labels)):
+                    token_labels[i].extend([-1] * (max_length - len(token_labels[i])))
+                    token_labels[i] = token_labels[i][:max_length]
+
+                # Gather input_ids, attention masks, sequence labels and token labels from batch
+                input_ids = encoded_sequences["input_ids"].to(device)
+                attention_masks = encoded_sequences["attention_mask"].to(device)
+                labels = torch.tensor(labels, dtype=torch.float, device=device)
+                token_labels = torch.tensor(token_labels, dtype=torch.float, device=device)
 
                 # If using mlo model pass inputs and token labels through mlo model
                 if args.mlo_model:
@@ -499,6 +511,10 @@ def train(args):
                         input_ids, attention_mask=attention_masks, labels=token_labels
                     )
                     loss = outputs["loss"]
+                    sentence_loss = outputs["sentence_loss"]
+                    token_loss = outputs["token_loss"]
+                    regularizer_loss_a = outputs["regularizer_loss_a"]
+                    regularizer_loss_b = outputs["regularizer_loss_b"]
                     seq_logits = outputs["sequence_logits"]
                     token_logits = outputs["token_logits"]
 
@@ -573,7 +589,14 @@ def train(args):
 
                 if args.use_wandb:
                     wandb.log(
-                        {"step_loss_val": loss.item(), "val_step": val_step,}
+                        {
+                            "step_loss_val": loss.item(),
+                            "sentence_loss_val": sentence_loss.item(),
+                            "token_loss_val": token_loss.item(),
+                            "regularizer_loss_a_val": regularizer_loss_a.item(),
+                            "regularizer_loss_b_val": regularizer_loss_b.item(),
+                            "val_step": val_step,
+                        }
                     )
 
                     for i in range(len(labels)):
@@ -952,6 +975,14 @@ if __name__ == "__main__":
         type=int,
         default=5,
         help="Number of epochs to wait for performance to improve (default: 5)",
+    )
+
+    parser.add(
+        "--early_stopping_objective",
+        action="store",
+        type=str,
+        default="loss",
+        help="Objective metric to determine early stopping by (default: loss)",
     )
 
     parser.add(
