@@ -20,7 +20,6 @@ class BinaryTokenTSVDataset(Dataset):
         conll_10_type="cue",
         wi_locness_type="A",
         include_special_tokens=False,
-        max_length=None,
     ):
         datasets = ["fce", "conll_10", "toxic", "wi_locness"]
 
@@ -64,11 +63,6 @@ class BinaryTokenTSVDataset(Dataset):
             self.token_labels,
         ) = self._get_samples_labels(tsv_file)
 
-        if max_length is not None:
-            self.max_length = max_length
-        else:
-            self.max_length = self._get_max_length(self.samples)
-
     def __len__(self):
         return len(self.samples)
 
@@ -77,28 +71,14 @@ class BinaryTokenTSVDataset(Dataset):
         sentence_label = self.sentence_label[idx]
         token_labels = self.token_labels[idx]
 
-        # encoded_sequence = self.tokenizer.encode_plus(
-        #     sequence,
-        #     padding="max_length",
-        #     truncation=True,
-        #     max_length=self.max_length,
-        #     return_tensors="pt",
-        # )
-
-        encoded_sequence = sequence
-
         if self.include_special_tokens:
             token_labels.insert(0, sentence_label)
             token_labels.append(sentence_label)
-            # token_labels.extend([-1] * (self.max_length - len(token_labels)))
-            # token_labels = token_labels[: self.max_length]
         else:
             token_labels.insert(0, -1)
             token_labels.append(-1)
-            # token_labels.extend([-1] * (self.max_length - len(token_labels)))
-            # token_labels = token_labels[: self.max_length]
 
-        return encoded_sequence, sentence_label, token_labels
+        return sequence, sentence_label, token_labels
 
     def _get_samples_labels(self, tsv_file):
         samples = []
@@ -156,12 +136,4 @@ class BinaryTokenTSVDataset(Dataset):
 
         encoded_output = [word for sublist in encoded_tokens for word in sublist]
         return encoded_output, encoded_labels
-
-    def _get_max_length(self, sentences):
-        max_length = 0
-        for sentence in sentences:
-            length = len(sentence)
-            if length > max_length:
-                max_length = length
-        return min(max_length + 2, 512)
 

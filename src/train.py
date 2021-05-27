@@ -26,18 +26,6 @@ from models.model import TokenModel
 import wandb
 
 
-# def collate_fn(batch):
-#     input_ids, attention_masks, labels, token_labels = [], [], [], []
-#     for data_dict, label, token_label in batch:
-#         input_ids.append(data_dict["input_ids"])
-#         attention_masks.append(data_dict["attention_mask"])
-#         labels.append(label)
-#         token_labels.append(token_label)
-#     input_ids = torch.cat(input_ids)
-#     attention_masks = torch.cat(attention_masks)
-#     return input_ids, attention_masks, labels, token_labels
-
-
 def collate_fn(batch):
     sequences, labels, token_labels = [], [], []
     for sequence, label, token_label in batch:
@@ -138,22 +126,13 @@ def train(args):
 
     model.to(device)
 
-    # Define training and validaton datasets
+    # Define training and validation datasets
     train_dataset = BinaryTokenTSVDataset(
         dataset_name=args.dataset,
         tokenizer=tokenizer,
         root_dir=args.root,
         mode="train",
         include_special_tokens=False,
-        max_length=args.max_seq_length,
-    )
-    val_dataset = BinaryTokenTSVDataset(
-        dataset_name=args.dataset,
-        tokenizer=tokenizer,
-        root_dir=args.root,
-        mode="dev",
-        include_special_tokens=False,
-        max_length=args.max_seq_length,
     )
 
     if "wi_locness" in args.dataset:
@@ -171,7 +150,6 @@ def train(args):
             root_dir=args.root,
             mode="dev",
             include_special_tokens=False,
-            max_length=512,
         )
 
     train_loader = DataLoader(
@@ -183,25 +161,12 @@ def train(args):
 
     # Optimizer and scheduler
     if args.lr_optimizer == "adamw":
-        optimizer = optim.AdamW(
-            model.parameters(),
-            lr=args.learning_rate,
-            eps=args.lr_epsilon,
-            weight_decay=args.lr_weight_decay,
-        )
+        optimizer = optim.AdamW(model.parameters(), lr=args.learning_rate,)
     elif args.lr_optimizer == "adam":
-        optimizer = optim.Adam(
-            model.parameters(),
-            lr=args.learning_rate,
-            eps=args.lr_epsilon,
-            weight_decay=args.lr_weight_decay,
-        )
+        optimizer = optim.Adam(model.parameters(), lr=args.learning_rate,)
     elif args.lr_optimizer == "sgd":
         optimizer = optim.SGD(
-            model.parameters(),
-            lr=args.learning_rate,
-            momentum=args.lr_momentum,
-            weight_decay=args.lr_weight_decay,
+            model.parameters(), lr=args.learning_rate, momentum=args.lr_momentum,
         )
 
     if args.lr_scheduler == "steplr":
@@ -339,6 +304,16 @@ def train(args):
                 train_token_true_negatives += token_true_negatives
                 train_token_false_negatives += token_false_negatives
 
+                token_train_precision = train_token_true_positives / (
+                    train_token_true_positives + train_token_false_positives + 1e-5
+                )
+                token_train_recall = train_token_true_positives / (
+                    train_token_true_positives + train_token_false_negatives + 1e-5
+                )
+                token_train_f1 = (2 * token_train_precision * token_train_recall) / (
+                    token_train_precision + token_train_recall + 1e-5
+                )
+
             # Calculate sequence prediction metrics
             seq_preds = seq_logits.view(-1) > 0.5
             seq_actuals = labels
@@ -366,27 +341,22 @@ def train(args):
             train_batches += 1
             train_step += 1
 
-            token_train_precision = train_token_true_positives / (
-                train_token_true_positives + train_token_false_positives + 1e-5
-            )
-            token_train_recall = train_token_true_positives / (
-                train_token_true_positives + train_token_false_negatives + 1e-5
-            )
-            token_train_f1 = (2 * token_train_precision * token_train_recall) / (
-                token_train_precision + token_train_recall + 1e-5
-            )
-
             if args.use_wandb:
-                wandb.log(
-                    {
-                        "step_loss_train": loss.item(),
-                        "sentence_loss_train": sentence_loss.item(),
-                        "token_loss_train": token_loss.item(),
-                        "regularizer_loss_a_train": regularizer_loss_a.item(),
-                        "regularizer_loss_b_train": regularizer_loss_b.item(),
-                        "train_step": train_step,
-                    }
-                )
+                if args.mlo_model:
+                    wandb.log(
+                        {
+                            "step_loss_train": loss.item(),
+                            "sentence_loss_train": sentence_loss.item(),
+                            "token_loss_train": token_loss.item(),
+                            "regularizer_loss_a_train": regularizer_loss_a.item(),
+                            "regularizer_loss_b_train": regularizer_loss_b.item(),
+                            "train_step": train_step,
+                        }
+                    )
+                else:
+                    wandb.log(
+                        {"step_loss_train": loss.item(), "train_step": train_step,}
+                    )
 
         # Calculate training metrics
         seq_train_accuracy = (
@@ -503,7 +473,9 @@ def train(args):
                 input_ids = encoded_sequences["input_ids"].to(device)
                 attention_masks = encoded_sequences["attention_mask"].to(device)
                 labels = torch.tensor(labels, dtype=torch.float, device=device)
-                token_labels = torch.tensor(token_labels, dtype=torch.float, device=device)
+                token_labels = torch.tensor(
+                    token_labels, dtype=torch.float, device=device
+                )
 
                 # If using mlo model pass inputs and token labels through mlo model
                 if args.mlo_model:
@@ -1078,30 +1050,6 @@ if __name__ == "__main__":
     )
 
     parser.add(
-        "--lr_epsilon",
-        action="store",
-        type=float,
-        default=1e-7,
-        help="Learning rate epsilon (default: 1e-7)",
-    )
-
-    parser.add(
-        "--lr_weight_decay",
-        action="store",
-        type=float,
-        default=0.1,
-        help="Learning rate weight decay (default: 0.1)",
-    )
-
-    parser.add(
-        "--max_seq_length",
-        action="store",
-        type=int,
-        default=128,
-        help="Maximum sequence length (default: 128)",
-    )
-
-    parser.add(
         "--lr_momentum",
         action="store",
         type=float,
@@ -1110,7 +1058,4 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
-
-    print(args)
-
     train(args)

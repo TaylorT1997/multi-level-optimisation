@@ -1,0 +1,11 @@
+# Config settings for train.py
+
+root = "/home/tom/Projects/multi-level-optimisation/"
+
+model = "bert-base-cased"
+tokenizer = "bert-base-cased"
+
+dataset = "conll_10"
+batch_size = 4
+
+model_name = ""

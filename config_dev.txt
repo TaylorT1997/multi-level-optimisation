@@ -30,5 +30,5 @@ regularizer_loss_weight = 0.1
 token_supervision = true
 normalise_supervised_losses = false
 
-save_model = false
+save_model = true
 use_wandb = false
