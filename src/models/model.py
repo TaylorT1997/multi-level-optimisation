@@ -20,6 +20,7 @@ class TokenModel(nn.Module):
         token_supervision=True,
         normalise_supervised_losses=False,
         normalise_regularization_losses=False,
+        subword_method="first",
         debug=False,
     ):
         super(TokenModel, self).__init__()
@@ -53,10 +54,11 @@ class TokenModel(nn.Module):
         self.normalise_supervised_losses = normalise_supervised_losses
         self.normalise_regularization_losses = normalise_regularization_losses
         self.token_supervision = token_supervision
+        self.subword_method = subword_method
 
         self.debug = debug
 
-    def forward(self, input_ids, attention_mask=None, labels=None):
+    def forward(self, input_ids, attention_mask=None, offset_mapping=None, labels=None):
         # Pass tokens through pretrained model
         pretrained_output = self.seq2seq_model(input_ids, attention_mask)
 
@@ -145,7 +147,10 @@ class TokenModel(nn.Module):
             regularizer_loss_a,
             regularizer_loss_b,
         ) = self._calculate_loss(
-            masked_token_attention_output, sentence_classification_output, labels
+            offset_mapping,
+            masked_token_attention_output,
+            sentence_classification_output,
+            labels,
         )
 
         output = {
@@ -162,7 +167,11 @@ class TokenModel(nn.Module):
         return output
 
     def _calculate_loss(
-        self, token_attention_output, sentence_classification_output, labels
+        self,
+        offset_mapping,
+        token_attention_output,
+        sentence_classification_output,
+        labels,
     ):
         if self.debug:
             print("token_attention_output: {}".format(token_attention_output))
@@ -196,9 +205,21 @@ class TokenModel(nn.Module):
         mse_loss = nn.MSELoss(reduction="sum")
         sentence_loss = mse_loss(sentence_classification_output, sentence_labels)
 
-        # Calculate the token MSE loss
+        # Calculate the token MSE loss depending on the subword method
         zero_labels = torch.where(labels != -1, labels, torch.zeros_like(labels))
-        token_loss = mse_loss(token_attention_output, zero_labels)
+        # token_loss = mse_loss(token_attention_output, zero_labels)
+        # token_loss = mse_loss(token_attention_output, torch.zeros_like(labels))
+
+        if self.subword_method == "first":
+            not_subword = offset_mapping[:, :, 0] == 0
+            # print(not_subword)
+            token_attention_output_subword_mask = torch.where(
+                not_subword,
+                token_attention_output,
+                torch.zeros_like(token_attention_output),
+            )
+
+        token_loss = mse_loss(token_attention_output_subword_mask, zero_labels)
 
         # Normalise the MSE losses (optionally)
         if self.normalise_supervised_losses:

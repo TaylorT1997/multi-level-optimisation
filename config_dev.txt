@@ -10,14 +10,11 @@ dataset = "conll_10"
 
 epochs = 5
 batch_size = 4
-max_seq_length = 4
 learning_rate = 1e-6
 early_stopping_patience = 7
 
 lr_optimizer = sgd
-lr_epsilon = 1e-7
 lr_momentum = 0.9
-lr_weight_decay = 0.1
 
 lr_scheduler = steplr
 lr_scheduler_step = 5
@@ -29,6 +26,7 @@ token_loss_weight = 1
 regularizer_loss_weight = 0.1
 token_supervision = true
 normalise_supervised_losses = false
+subword_method = "first"
 
 save_model = true
 use_wandb = false

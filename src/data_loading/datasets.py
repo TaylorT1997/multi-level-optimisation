@@ -104,7 +104,8 @@ class BinaryTokenTSVDataset(Dataset):
                             words, word_labels, self.token_label_mode
                         )
 
-                        samples.append(tokenized_words)
+                        # samples.append(tokenized_words)
+                        samples.append(words)
                         sentence_labels.append(sentence_label)
                         token_labels.append(tokenized_word_labels)
 

@@ -11,13 +11,13 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, Dataset, random_split
 from transformers import (
     BertForSequenceClassification,
-    BertTokenizer,
+    BertTokenizerFast,
     AdamW,
     BertConfig,
-    DebertaTokenizer,
+    # DebertaTokenizerFast,
     DebertaForSequenceClassification,
     DebertaConfig,
-    GPT2Tokenizer,
+    GPT2TokenizerFast,
 )
 
 from data_loading.datasets import BinaryTokenTSVDataset
@@ -65,6 +65,7 @@ def train(args):
         print("Token loss weight: {}".format(args.token_loss_weight))
         print("Regularizer loss weight: {}".format(args.regularizer_loss_weight))
         print("Token supervision: {}".format(args.token_supervision))
+        print("Subword method: {}".format(args.subword_method))
         print(
             "Normalise supervised losses: {}".format(args.normalise_supervised_losses)
         )
@@ -98,11 +99,12 @@ def train(args):
                 token_supervision=args.token_supervision,
                 normalise_supervised_losses=args.normalise_supervised_losses,
                 normalise_regularization_losses=args.normalise_regularization_losses,
+                subword_method=args.subword_method,
             )
         else:
             model_config = BertConfig.from_pretrained(args.model, num_labels=1)
             model = BertForSequenceClassification(model_config)
-        tokenizer = BertTokenizer.from_pretrained(args.tokenizer)
+        tokenizer = BertTokenizerFast.from_pretrained(args.tokenizer)
     elif "deberta-base" in args.model:
         if args.mlo_model:
             model = TokenModel(
@@ -114,11 +116,12 @@ def train(args):
                 token_supervision=args.token_supervision,
                 normalise_supervised_losses=args.normalise_supervised_losses,
                 normalise_regularization_losses=args.normalise_regularization_losses,
+                subword_method=args.subword_method,
             )
         else:
             model_config = DebertaConfig.from_pretrained(args.model, num_labels=1)
             model = DebertaForSequenceClassification(model_config)
-        tokenizer = DebertaTokenizer.from_pretrained(args.tokenizer)
+        # tokenizer = DebertaTokenizerFast.from_pretrained(args.tokenizer)
 
     model.classifier = torch.nn.Sequential(
         torch.nn.Linear(in_features=768, out_features=1, bias=True), torch.nn.Sigmoid()
@@ -132,6 +135,7 @@ def train(args):
         tokenizer=tokenizer,
         root_dir=args.root,
         mode="train",
+        token_label_mode=args.subword_method,
         include_special_tokens=False,
     )
 
@@ -149,6 +153,7 @@ def train(args):
             tokenizer=tokenizer,
             root_dir=args.root,
             mode="dev",
+            token_label_mode=args.subword_method,
             include_special_tokens=False,
         )
 
@@ -228,9 +233,14 @@ def train(args):
             optimizer.zero_grad()
 
             # Batch decode and encode to get correct padding for the batch
-            decoded = tokenizer.batch_decode(sequences)
+            # decoded = tokenizer.batch_decode(sequences)
             encoded_sequences = tokenizer(
-                decoded, padding=True, truncation=True, return_tensors="pt",
+                sequences,
+                is_split_into_words=True,
+                padding=True,
+                truncation=True,
+                return_tensors="pt",
+                return_offsets_mapping=True,
             )
 
             # Pad token labels
@@ -246,13 +256,17 @@ def train(args):
             # Gather input_ids, attention masks, sequence labels and token labels from batch
             input_ids = encoded_sequences["input_ids"].to(device)
             attention_masks = encoded_sequences["attention_mask"].to(device)
+            offset_mapping = encoded_sequences["offset_mapping"].to(device)
             labels = torch.tensor(labels, dtype=torch.float, device=device)
             token_labels = torch.tensor(token_labels, dtype=torch.float, device=device)
 
             # If using mlo model pass inputs and token labels through mlo model
             if args.mlo_model:
                 outputs = model(
-                    input_ids, attention_mask=attention_masks, labels=token_labels
+                    input_ids,
+                    attention_mask=attention_masks,
+                    offset_mapping=offset_mapping,
+                    labels=token_labels,
                 )
                 loss = outputs["loss"]
                 sentence_loss = outputs["sentence_loss"]
@@ -265,7 +279,10 @@ def train(args):
             # Otherwise pass inputs and sequence labels through basic pretrained model
             else:
                 outputs = model(
-                    input_ids, attention_mask=attention_masks, labels=labels
+                    input_ids,
+                    attention_mask=attention_masks,
+                    offset_mapping=offset_mapping,
+                    labels=labels,
                 )
                 loss = outputs.loss
                 seq_logits = outputs.logits
@@ -454,9 +471,14 @@ def train(args):
                 optimizer.zero_grad()
 
                 # Batch decode and encode to get correct padding for the batch
-                decoded = tokenizer.batch_decode(sequences)
+                # decoded = tokenizer.batch_decode(sequences)
                 encoded_sequences = tokenizer(
-                    decoded, padding=True, truncation=True, return_tensors="pt",
+                    sequences,
+                    is_split_into_words=True,
+                    padding=True,
+                    truncation=True,
+                    return_tensors="pt",
+                    return_offsets_mapping=True,
                 )
 
                 # Pad token labels
@@ -472,6 +494,7 @@ def train(args):
                 # Gather input_ids, attention masks, sequence labels and token labels from batch
                 input_ids = encoded_sequences["input_ids"].to(device)
                 attention_masks = encoded_sequences["attention_mask"].to(device)
+                offset_mapping = encoded_sequences["offset_mapping"].to(device)
                 labels = torch.tensor(labels, dtype=torch.float, device=device)
                 token_labels = torch.tensor(
                     token_labels, dtype=torch.float, device=device
@@ -480,7 +503,10 @@ def train(args):
                 # If using mlo model pass inputs and token labels through mlo model
                 if args.mlo_model:
                     outputs = model(
-                        input_ids, attention_mask=attention_masks, labels=token_labels
+                        input_ids,
+                        attention_mask=attention_masks,
+                        offset_mapping=offset_mapping,
+                        labels=labels,
                     )
                     loss = outputs["loss"]
                     sentence_loss = outputs["sentence_loss"]
@@ -1055,6 +1081,14 @@ if __name__ == "__main__":
         type=float,
         default=0.9,
         help="Learning rate momentum (default: 0.9)",
+    )
+
+    parser.add(
+        "--subword_method",
+        action="store",
+        type=str,
+        default="first",
+        help="Method for dealing with subwords (default: first)",
     )
 
     args = parser.parse_args()

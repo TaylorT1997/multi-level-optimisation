@@ -6,7 +6,8 @@
 - [X] Develop torch dataset for sentence classification
 - [X] Develop torch dataset for token classification
 - [X] Create model with token and sentence supervision
-- [ ] Full run of token model
+- [X] Full run of token model
+- [ ] Add subword methods
 
 ## Medium Priority
 
@@ -21,18 +22,18 @@
 - [X] Run sentence classification on DeBERTa
 - [X] Add LR scheduler
 - [X] State of the art comparison
-- [ ] Start on background report
+- [X] Start on background report
 - [X] Add quadratic soft attention
 - [ ] Add option for CRT
 - [X] Add config file
 - [ ] Evaluate models
-- [ ] Split wi locness to 80 20
+- [X] Split wi locness to 80 20
 
 ## Low Priority
 
-- [ ] Overleaf for papers
+- [X] Overleaf for papers
 - [X] Write up data processing progress
-- [ ] Write up sentence dataset progress
+- [X] Write up sentence dataset progress
 - [X] Share repo
 - [X] Add sigmoid to make prediction
 - [X] Add validation set
@@ -41,12 +42,12 @@
 - [X] Add console prints
 - [ ] Functionise logging metrics
 - [X] Fix CoNLL-10 train download and processing
-- [ ] Read and summarise 'core' papers
+- [X] Read and summarise 'core' papers
 - [X] Remove CLS and SEP tokens
-- [ ] Add more schedulers and optimizers
+- [X] Add more schedulers and optimizers
 - [X] Apply mask to normalisation of attention
 - [X] Add option to use CLS token
-- [ ] Add F0.5 measure
+- [X] Add F0.5 measure
 - [ ] Add token logging
 
 # Blockers
