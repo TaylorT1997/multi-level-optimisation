@@ -54,6 +54,7 @@ def train(args):
         print("Epochs: {}".format(args.epochs))
         print("Learning rate: {}".format(args.learning_rate))
         print("Early stopping patience: {}".format(args.early_stopping_patience))
+        print("Early stopping objective: {}".format(args.early_stopping_objective))
         print()
         print("Optimizer: {}".format(args.lr_optimizer))
         print("Scheduler: {}".format(args.lr_scheduler))
@@ -185,18 +186,11 @@ def train(args):
 
     # Record best metrics
     best_epoch = 0
-
-    best_train_loss = 1e10
-    best_train_accuracy = 0
-    best_train_precision = 0
-    best_train_recall = 0
-    best_train_f1 = 0
-
-    best_val_loss = 1e10
-    best_val_accuracy = 0
-    best_val_precision = 0
-    best_val_recall = 0
-    best_val_f1 = 0
+    best_val_loss = 1e5
+    best_seq_val_f1 = -1
+    best_token_val_f1 = -1
+    best_seq_val_f05 = -1
+    best_token_val_f05 = -1
 
     # Early stopping
     no_improvement_num = 0
@@ -321,16 +315,6 @@ def train(args):
                 train_token_true_negatives += token_true_negatives
                 train_token_false_negatives += token_false_negatives
 
-                token_train_precision = train_token_true_positives / (
-                    train_token_true_positives + train_token_false_positives + 1e-5
-                )
-                token_train_recall = train_token_true_positives / (
-                    train_token_true_positives + train_token_false_negatives + 1e-5
-                )
-                token_train_f1 = (2 * token_train_precision * token_train_recall) / (
-                    token_train_precision + token_train_recall + 1e-5
-                )
-
             # Calculate sequence prediction metrics
             seq_preds = seq_logits.view(-1) > 0.5
             seq_actuals = labels
@@ -398,7 +382,7 @@ def train(args):
             train_token_true_positives
             + train_token_false_positives
             + train_token_true_negatives
-            + train_token_false_negatives
+            + train_token_false_negatives + 1e-5
         )
         token_train_precision = train_token_true_positives / (
             train_token_true_positives + train_token_false_positives + 1e-5
@@ -506,7 +490,7 @@ def train(args):
                         input_ids,
                         attention_mask=attention_masks,
                         offset_mapping=offset_mapping,
-                        labels=labels,
+                        labels=token_labels,
                     )
                     loss = outputs["loss"]
                     sentence_loss = outputs["sentence_loss"]
@@ -586,16 +570,24 @@ def train(args):
                 val_step += 1
 
                 if args.use_wandb:
-                    wandb.log(
-                        {
-                            "step_loss_val": loss.item(),
-                            "sentence_loss_val": sentence_loss.item(),
-                            "token_loss_val": token_loss.item(),
-                            "regularizer_loss_a_val": regularizer_loss_a.item(),
-                            "regularizer_loss_b_val": regularizer_loss_b.item(),
-                            "val_step": val_step,
-                        }
-                    )
+                    if args.mlo_model:
+                        wandb.log(
+                            {
+                                "step_loss_val": loss.item(),
+                                "sentence_loss_val": sentence_loss.item(),
+                                "token_loss_val": token_loss.item(),
+                                "regularizer_loss_a_val": regularizer_loss_a.item(),
+                                "regularizer_loss_b_val": regularizer_loss_b.item(),
+                                "val_step": val_step,
+                            }
+                        )
+                    else:
+                        wandb.log(
+                            {
+                                "step_loss_val": loss.item(),
+                                "val_step": val_step,
+                            }
+                        )
 
                     for i in range(len(labels)):
                         if "deberta" in args.tokenizer:
@@ -627,10 +619,11 @@ def train(args):
                         true_label = seq_actuals[i].item()
                         pred_label = seq_preds[i].item()
 
-                        true_token_labels = token_actuals[i][token_actuals[i] != -1]
-                        pred_token_labels = token_preds[i][token_actuals[i] != -1]
+                        
 
                         if args.mlo_model:
+                            true_token_labels = token_actuals[i][token_actuals[i] != -1]
+                            pred_token_labels = token_preds[i][token_actuals[i] != -1]
                             table.add_data(
                                 input_text,
                                 str(pred_label),
@@ -666,7 +659,7 @@ def train(args):
             val_token_true_positives
             + val_token_false_positives
             + val_token_true_negatives
-            + val_token_false_negatives
+            + val_token_false_negatives + 1e-5
         )
         token_val_precision = val_token_true_positives / (
             val_token_true_positives + val_token_false_positives + 1e-5
@@ -741,8 +734,24 @@ def train(args):
 
             print("Epoch time: {:.0f}".format(epoch_time))
 
+        if args.early_stopping_objective == "loss":
+            objective = -val_av_loss
+            best_objective = -best_val_loss
+        elif args.early_stopping_objective == "seq_f1":
+            objective = seq_val_f1
+            best_objective = best_seq_val_f1
+        elif args.early_stopping_objective == "tok_f1":
+            objective = token_val_f1
+            best_objective = best_token_val_f1
+        elif args.early_stopping_objective == "seq_f05":
+            objective = seq_val_f05
+            best_objective = best_seq_val_f05
+        elif args.early_stopping_objective == "tok_f05":
+            objective = token_val_f05
+            best_objective = best_token_val_f05
+
         # Determine whether to do early stopping
-        if val_av_loss < best_val_loss:
+        if objective > best_objective:
             best_epoch = epoch
 
             best_train_loss = train_av_loss
@@ -787,34 +796,54 @@ def train(args):
     training_time = training_finish - training_start
 
     if args.use_wandb:
-        wandb.log(
-            {
-                "best_epoch": best_epoch,
-                "best_train_loss": best_train_loss,
-                "best_seq_train_accuracy": best_seq_train_accuracy,
-                "best_seq_train_precision": best_seq_train_precision,
-                "best_seq_train_recall": best_seq_train_recall,
-                "best_seq_train_f1": best_seq_train_f1,
-                "best_train_seq_f0.5": best_seq_train_f05,
-                "best_val_loss": best_val_loss,
-                "best_seq_val_accuracy": best_seq_val_accuracy,
-                "best_seq_val_precision": best_seq_val_precision,
-                "best_seq_val_recall": best_seq_val_recall,
-                "best_seq_val_f1": best_seq_val_f1,
-                "best_seq_val_f0.5": best_seq_val_f05,
-                "best_token_train_accuracy": best_token_train_accuracy,
-                "best_token_train_precision": best_token_train_precision,
-                "best_token_train_recall": best_token_train_recall,
-                "best_token_train_f1": best_token_train_f1,
-                "best_token_train_f0.5": best_token_train_f05,
-                "best_token_val_accuracy": best_token_val_accuracy,
-                "best_token_val_precision": best_token_val_precision,
-                "best_token_val_recall": best_token_val_recall,
-                "best_token_val_f1": best_token_val_f1,
-                "best_token_val_f0.5": best_token_val_f05,
-                "training_time": training_time,
-            }
-        )
+        if args.mlo_model:
+            wandb.log(
+                {
+                    "best_epoch": best_epoch,
+                    "best_train_loss": best_train_loss,
+                    "best_seq_train_accuracy": best_seq_train_accuracy,
+                    "best_seq_train_precision": best_seq_train_precision,
+                    "best_seq_train_recall": best_seq_train_recall,
+                    "best_seq_train_f1": best_seq_train_f1,
+                    "best_train_seq_f0.5": best_seq_train_f05,
+                    "best_val_loss": best_val_loss,
+                    "best_seq_val_accuracy": best_seq_val_accuracy,
+                    "best_seq_val_precision": best_seq_val_precision,
+                    "best_seq_val_recall": best_seq_val_recall,
+                    "best_seq_val_f1": best_seq_val_f1,
+                    "best_seq_val_f0.5": best_seq_val_f05,
+                    "best_token_train_accuracy": best_token_train_accuracy,
+                    "best_token_train_precision": best_token_train_precision,
+                    "best_token_train_recall": best_token_train_recall,
+                    "best_token_train_f1": best_token_train_f1,
+                    "best_token_train_f0.5": best_token_train_f05,
+                    "best_token_val_accuracy": best_token_val_accuracy,
+                    "best_token_val_precision": best_token_val_precision,
+                    "best_token_val_recall": best_token_val_recall,
+                    "best_token_val_f1": best_token_val_f1,
+                    "best_token_val_f0.5": best_token_val_f05,
+                    "training_time": training_time,
+                }
+            )
+        else:
+            wandb.log(
+                {
+                    "best_epoch": best_epoch,
+                    "best_train_loss": best_train_loss,
+                    "best_seq_train_accuracy": best_seq_train_accuracy,
+                    "best_seq_train_precision": best_seq_train_precision,
+                    "best_seq_train_recall": best_seq_train_recall,
+                    "best_seq_train_f1": best_seq_train_f1,
+                    "best_train_seq_f0.5": best_seq_train_f05,
+                    "best_val_loss": best_val_loss,
+                    "best_seq_val_accuracy": best_seq_val_accuracy,
+                    "best_seq_val_precision": best_seq_val_precision,
+                    "best_seq_val_recall": best_seq_val_recall,
+                    "best_seq_val_f1": best_seq_val_f1,
+                    "best_seq_val_f0.5": best_seq_val_f05,
+                    "training_time": training_time,
+                }
+            )
 
     if not args.silent:
         print()
