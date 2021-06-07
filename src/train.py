@@ -285,29 +285,35 @@ def train(args):
             loss.backward()
             optimizer.step()
 
+            # # Remove subword tokens
+            # if args.subword_method == "first":
+            #     not_subword = offset_mapping[:, :, 0] == 0
+            #     word_labels = torch.where(
+            #         not_subword, token_labels, torch.ones_like(token_labels) * -1
+            #     )
+
+            # print(word_labels)
+            # print(word_labels.shape)
+
             # Calculate token prediction metrics
             if args.mlo_model:
                 token_preds = token_logits > 0.5
                 token_actuals = token_labels
 
-                masked_zeros = torch.where(
-                    token_actuals != -1, token_actuals, torch.zeros_like(token_actuals)
-                )
-                masked_ones = torch.where(
-                    token_actuals != -1, token_actuals, torch.ones_like(token_actuals)
-                )
+                token_preds = token_logits > 0.5
+                token_actuals = token_labels
 
                 token_true_positives = torch.sum(
-                    torch.logical_and(token_preds == 1, masked_zeros == 1)
+                    torch.logical_and(token_preds == 1, token_actuals == 1)
                 ).item()
                 token_false_positives = torch.sum(
-                    torch.logical_and(token_preds == 1, masked_ones == 0)
+                    torch.logical_and(token_preds == 1, token_actuals == 0)
                 ).item()
                 token_true_negatives = torch.sum(
-                    torch.logical_and(token_preds == 0, masked_ones == 0)
+                    torch.logical_and(token_preds == 0, token_actuals == 0)
                 ).item()
                 token_false_negatives = torch.sum(
-                    torch.logical_and(token_preds == 0, masked_zeros == 1)
+                    torch.logical_and(token_preds == 0, token_actuals == 1)
                 ).item()
 
                 train_token_true_positives += token_true_positives
@@ -382,7 +388,8 @@ def train(args):
             train_token_true_positives
             + train_token_false_positives
             + train_token_true_negatives
-            + train_token_false_negatives + 1e-5
+            + train_token_false_negatives
+            + 1e-5
         )
         token_train_precision = train_token_true_positives / (
             train_token_true_positives + train_token_false_positives + 1e-5
@@ -583,10 +590,7 @@ def train(args):
                         )
                     else:
                         wandb.log(
-                            {
-                                "step_loss_val": loss.item(),
-                                "val_step": val_step,
-                            }
+                            {"step_loss_val": loss.item(), "val_step": val_step,}
                         )
 
                     for i in range(len(labels)):
@@ -618,8 +622,6 @@ def train(args):
                             )
                         true_label = seq_actuals[i].item()
                         pred_label = seq_preds[i].item()
-
-                        
 
                         if args.mlo_model:
                             true_token_labels = token_actuals[i][token_actuals[i] != -1]
@@ -659,7 +661,8 @@ def train(args):
             val_token_true_positives
             + val_token_false_positives
             + val_token_true_negatives
-            + val_token_false_negatives + 1e-5
+            + val_token_false_negatives
+            + 1e-5
         )
         token_val_precision = val_token_true_positives / (
             val_token_true_positives + val_token_false_positives + 1e-5

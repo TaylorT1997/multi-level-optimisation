@@ -133,7 +133,7 @@ class BinaryTokenTSVDataset(Dataset):
                     if j == 0:
                         encoded_labels.append(word_labels[i])
                     else:
-                        encoded_labels.append(abs(word_labels[i] - 1))
+                        encoded_labels.append(-2)
 
         encoded_output = [word for sublist in encoded_tokens for word in sublist]
         return encoded_output, encoded_labels
