@@ -285,16 +285,6 @@ def train(args):
             loss.backward()
             optimizer.step()
 
-            # # Remove subword tokens
-            # if args.subword_method == "first":
-            #     not_subword = offset_mapping[:, :, 0] == 0
-            #     word_labels = torch.where(
-            #         not_subword, token_labels, torch.ones_like(token_labels) * -1
-            #     )
-
-            # print(word_labels)
-            # print(word_labels.shape)
-
             # Calculate token prediction metrics
             if args.mlo_model:
                 token_preds = token_logits > 0.5
@@ -520,28 +510,20 @@ def train(args):
                     token_preds = token_logits > 0.5
                     token_actuals = token_labels
 
-                    masked_zeros = torch.where(
-                        token_actuals != -1,
-                        token_actuals,
-                        torch.zeros_like(token_actuals),
-                    )
-                    masked_ones = torch.where(
-                        token_actuals != -1,
-                        token_actuals,
-                        torch.ones_like(token_actuals),
-                    )
+                    token_preds = token_logits > 0.5
+                    token_actuals = token_labels
 
                     token_true_positives = torch.sum(
-                        torch.logical_and(token_preds == 1, masked_zeros == 1)
+                        torch.logical_and(token_preds == 1, token_actuals == 1)
                     ).item()
                     token_false_positives = torch.sum(
-                        torch.logical_and(token_preds == 1, masked_ones == 0)
+                        torch.logical_and(token_preds == 1, token_actuals == 0)
                     ).item()
                     token_true_negatives = torch.sum(
-                        torch.logical_and(token_preds == 0, masked_ones == 0)
+                        torch.logical_and(token_preds == 0, token_actuals == 0)
                     ).item()
                     token_false_negatives = torch.sum(
-                        torch.logical_and(token_preds == 0, masked_zeros == 1)
+                        torch.logical_and(token_preds == 0, token_actuals == 1)
                     ).item()
 
                     val_token_true_positives += token_true_positives
@@ -743,13 +725,13 @@ def train(args):
         elif args.early_stopping_objective == "seq_f1":
             objective = seq_val_f1
             best_objective = best_seq_val_f1
-        elif args.early_stopping_objective == "tok_f1":
+        elif args.early_stopping_objective == "token_f1":
             objective = token_val_f1
             best_objective = best_token_val_f1
         elif args.early_stopping_objective == "seq_f05":
             objective = seq_val_f05
             best_objective = best_seq_val_f05
-        elif args.early_stopping_objective == "tok_f05":
+        elif args.early_stopping_objective == "token_f05":
             objective = token_val_f05
             best_objective = best_token_val_f05
 
