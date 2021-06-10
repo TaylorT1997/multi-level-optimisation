@@ -7,6 +7,7 @@ import configargparse
 import math
 
 import torch
+from torch._C import device
 import torch.optim as optim
 from torch.utils.data import DataLoader, Dataset, random_split
 from transformers import (
@@ -14,7 +15,7 @@ from transformers import (
     BertTokenizerFast,
     AdamW,
     BertConfig,
-    # DebertaTokenizerFast,
+    DebertaTokenizer,
     DebertaForSequenceClassification,
     DebertaConfig,
     GPT2TokenizerFast,
@@ -101,11 +102,17 @@ def train(args):
                 normalise_supervised_losses=args.normalise_supervised_losses,
                 normalise_regularization_losses=args.normalise_regularization_losses,
                 subword_method=args.subword_method,
+                device=device,
             )
         else:
             model_config = BertConfig.from_pretrained(args.model, num_labels=1)
             model = BertForSequenceClassification(model_config)
+            model.classifier = torch.nn.Sequential(
+                torch.nn.Linear(in_features=768, out_features=1, bias=True),
+                torch.nn.Sigmoid(),
+            )
         tokenizer = BertTokenizerFast.from_pretrained(args.tokenizer)
+
     elif "deberta-base" in args.model:
         if args.mlo_model:
             model = TokenModel(
@@ -118,15 +125,16 @@ def train(args):
                 normalise_supervised_losses=args.normalise_supervised_losses,
                 normalise_regularization_losses=args.normalise_regularization_losses,
                 subword_method=args.subword_method,
+                device=device,
             )
         else:
             model_config = DebertaConfig.from_pretrained(args.model, num_labels=1)
             model = DebertaForSequenceClassification(model_config)
-        # tokenizer = DebertaTokenizerFast.from_pretrained(args.tokenizer)
-
-    model.classifier = torch.nn.Sequential(
-        torch.nn.Linear(in_features=768, out_features=1, bias=True), torch.nn.Sigmoid()
-    )
+            model.classifier = torch.nn.Sequential(
+                torch.nn.Linear(in_features=768, out_features=1, bias=True),
+                torch.nn.Sigmoid(),
+            )
+        tokenizer = DebertaTokenizer.from_pretrained(args.tokenizer)
 
     model.to(device)
 
@@ -136,7 +144,7 @@ def train(args):
         tokenizer=tokenizer,
         root_dir=args.root,
         mode="train",
-        token_label_mode=args.subword_method,
+        token_label_mode="first",
         include_special_tokens=False,
     )
 
@@ -154,7 +162,7 @@ def train(args):
             tokenizer=tokenizer,
             root_dir=args.root,
             mode="dev",
-            token_label_mode=args.subword_method,
+            token_label_mode="first",
             include_special_tokens=False,
         )
 

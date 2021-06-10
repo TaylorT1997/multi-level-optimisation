@@ -1,3 +1,4 @@
+import enum
 import torch
 import torch.nn as nn
 from transformers import (
@@ -7,6 +8,7 @@ from transformers import (
     DebertaConfig,
     DebertaModel,
 )
+import sys
 
 
 class TokenModel(nn.Module):
@@ -20,7 +22,8 @@ class TokenModel(nn.Module):
         token_supervision=True,
         normalise_supervised_losses=False,
         normalise_regularization_losses=False,
-        subword_method="first",
+        subword_method="max",
+        device="cuda",
         debug=False,
     ):
         super(TokenModel, self).__init__()
@@ -56,6 +59,7 @@ class TokenModel(nn.Module):
         self.token_supervision = token_supervision
         self.subword_method = subword_method
 
+        self.device = device
         self.debug = debug
 
     def forward(self, input_ids, attention_mask=None, offset_mapping=None, labels=None):
@@ -78,17 +82,80 @@ class TokenModel(nn.Module):
             print(
                 "token_attention_output shape: {}".format(token_attention_output.shape)
             )
+            print(token_attention_output)
 
-        # Mask padded tokens
+        # not_subword = offset_mapping[:, :, 0] == 0
+        # num_words = torch.sum(not_subword, dim=1)
+
+        # print(not_subword)
+        # print(num_words)
+
+        word_attention_output = torch.zeros_like(token_attention_output)
+
+        # token_attention_output = torch.nn.functional.pad(
+        #     token_attention_output.unsqueeze(-1), pad=(0, 5, 0, 0)
+        # )
+
+        # print(token_attention_output)
+
+        # sys.exit()
+
+        indices = None
+        for i, sequence_offset_mapping in enumerate(offset_mapping):
+            for j, token_offset_mapping in enumerate(sequence_offset_mapping):
+                if token_offset_mapping[0] == 0:
+                    if indices is not None:
+                        # Replace the first token with the max or mean
+                        if self.subword_method == "max":
+                            word_attention_output[i, indices[0]] = torch.max(
+                                torch.index_select(
+                                    token_attention_output,
+                                    1,
+                                    torch.tensor(indices, device=self.device),
+                                )
+                            )
+                            # word_attention_output[i, first_subword] = torch.max(
+                            #     token_attention_output[i, first_subword:last_subword]
+                            # )
+                            # print(token_attention_output[i, first_subword:last_subword])
+
+                            # max_val = torch.max(final_subword)
+                            # token_attention_output[
+                            #     first_subword_i, first_subword_j
+                            # ] = max_val
+                        # elif self.subword_method == "mean":
+                        #     mean_val = torch.mean(final_subword)
+                        #     token_attention_output[
+                        #         first_subword_i, first_subword_j
+                        #     ] = mean_val
+
+                    indices = [j]
+
+                else:
+                    indices.append(j)
+                    # subword_values = torch.cat(
+                    #     (subword_values, torch.tensor([token_attention_output[i, j]]),),
+                    #     0,
+                    # )
+
+        # print("!!!!")
+        # print(token_attention_output)
+        # print(word_attention_output)
+
+        # sys.exit()
+
+        # Mask padded tokens and subword tokens
         token_attention_mask = torch.where(
             labels != -1, torch.ones_like(labels), torch.zeros_like(labels)
         )
-
-        if self.debug:
-            print("token_attention_mask shape: {}".format(token_attention_mask.shape))
+        not_subword = offset_mapping[:, :, 0] == 0
+        subword_attention_mask = torch.where(
+            not_subword, torch.ones_like(not_subword), torch.zeros_like(not_subword)
+        )
+        token_attention_mask = torch.mul(token_attention_mask, subword_attention_mask)
 
         masked_token_attention_output = torch.mul(
-            token_attention_output, token_attention_mask
+            word_attention_output, token_attention_mask
         )
 
         if self.debug:
@@ -97,6 +164,7 @@ class TokenModel(nn.Module):
                     masked_token_attention_output.shape
                 )
             )
+            print(masked_token_attention_output)
 
         # Normalise the attention output
         token_attention_output_normalised = torch.pow(
@@ -115,7 +183,7 @@ class TokenModel(nn.Module):
             )
 
         # Apply normalised attention to pretrained output
-        pretrained_output_with_attention = torch.matmul(
+        pretrained_output_with_attention = torch.bmm(
             pretrained_output.last_hidden_state.transpose(1, 2),
             token_attention_output_normalised.unsqueeze(2),
         )
@@ -207,19 +275,7 @@ class TokenModel(nn.Module):
 
         # Calculate the token MSE loss depending on the subword method
         zero_labels = torch.where(labels != -1, labels, torch.zeros_like(labels))
-        # token_loss = mse_loss(token_attention_output, zero_labels)
-        # token_loss = mse_loss(token_attention_output, torch.zeros_like(labels))
-
-        if self.subword_method == "first":
-            not_subword = offset_mapping[:, :, 0] == 0
-            # print(not_subword)
-            token_attention_output_subword_mask = torch.where(
-                not_subword,
-                token_attention_output,
-                torch.zeros_like(token_attention_output),
-            )
-
-        token_loss = mse_loss(token_attention_output_subword_mask, zero_labels)
+        token_loss = mse_loss(token_attention_output, zero_labels)
 
         # Normalise the MSE losses (optionally)
         if self.normalise_supervised_losses:
