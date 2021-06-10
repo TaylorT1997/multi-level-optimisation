@@ -107,11 +107,19 @@ class TokenModel(nn.Module):
                     if indices is not None:
                         # Replace the first token with the max or mean
                         if self.subword_method == "max":
+                            # print("!!!!")
+                            # print(
+                            #     torch.index_select(
+                            #         token_attention_output[i],
+                            #         dim=0,
+                            #         index=torch.tensor(indices, device=self.device),
+                            #     )
+                            # )
                             word_attention_output[i, indices[0]] = torch.max(
                                 torch.index_select(
-                                    token_attention_output,
-                                    1,
-                                    torch.tensor(indices, device=self.device),
+                                    token_attention_output[i],
+                                    dim=0,
+                                    index=torch.tensor(indices, device=self.device),
                                 )
                             )
                             # word_attention_output[i, first_subword] = torch.max(
@@ -138,11 +146,9 @@ class TokenModel(nn.Module):
                     #     0,
                     # )
 
-        # print("!!!!")
-        # print(token_attention_output)
-        # print(word_attention_output)
-
-        # sys.exit()
+        if self.debug:
+            print("word_attention_output shape: {}".format(word_attention_output.shape))
+            print(word_attention_output)
 
         # Mask padded tokens and subword tokens
         token_attention_mask = torch.where(
@@ -274,8 +280,15 @@ class TokenModel(nn.Module):
         sentence_loss = mse_loss(sentence_classification_output, sentence_labels)
 
         # Calculate the token MSE loss depending on the subword method
-        zero_labels = torch.where(labels != -1, labels, torch.zeros_like(labels))
+        mse_loss = nn.MSELoss(reduction="sum")
+        zero_labels = torch.where(labels == 1, labels, torch.zeros_like(labels))
         token_loss = mse_loss(token_attention_output, zero_labels)
+
+        # print("DEBUG!!!!!!!!!!")
+        # print(labels)
+        # print(zero_labels)
+        # print(token_loss)
+        # print("DEBUG!!!!!!!!!!")
 
         # Normalise the MSE losses (optionally)
         if self.normalise_supervised_losses:
