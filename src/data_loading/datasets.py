@@ -1,6 +1,7 @@
 import os
 import csv
 import numpy as np
+import sys
 
 import torch
 import torch.nn as nn
@@ -75,7 +76,7 @@ class BinaryTokenTSVDataset(Dataset):
             token_labels.insert(0, sentence_label)
             token_labels.append(sentence_label)
         else:
-            token_labels.insert(0, -1)
+            token_labels.insert(0, -3)
             token_labels.append(-1)
 
         return sequence, sentence_label, token_labels
