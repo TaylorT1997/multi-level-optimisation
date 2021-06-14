@@ -216,7 +216,6 @@ def train(args):
         epoch_start = time.time()
         model.train()
 
-        train_samples = 0
         train_total_loss = 0
         train_batches = 0
 
@@ -341,10 +340,11 @@ def train(args):
             train_seq_true_negatives += seq_true_negatives
             train_seq_false_negatives += seq_false_negatives
 
-            train_samples += len(seq_preds)
             train_total_loss += loss.item()
             train_batches += 1
             train_step += 1
+
+            break
 
             if args.use_wandb:
                 if args.mlo_model:
@@ -364,9 +364,12 @@ def train(args):
                     )
 
         # Calculate training metrics
-        seq_train_accuracy = (
-            train_seq_true_positives + train_seq_true_negatives
-        ) / train_samples
+        seq_train_accuracy = (train_seq_true_positives + train_seq_true_negatives) / (
+            train_seq_true_positives
+            + train_seq_true_negatives
+            + train_seq_true_negatives
+            + train_seq_false_negatives
+        )
         seq_train_precision = train_seq_true_positives / (
             train_seq_true_positives + train_seq_false_positives + 1e-5
         )
@@ -424,7 +427,6 @@ def train(args):
 
         # Validation loop
         model.eval()
-        val_samples = 0
         val_total_loss = 0
         val_batches = 0
 
@@ -516,22 +518,18 @@ def train(args):
                 # Calculate token prediction metrics
                 if args.mlo_model:
                     token_preds = token_logits > 0.5
-                    token_actuals = token_labels
-
-                    token_preds = token_logits > 0.5
-                    token_actuals = token_labels
 
                     token_true_positives = torch.sum(
-                        torch.logical_and(token_preds == 1, token_actuals == 1)
+                        torch.logical_and(token_preds == 1, token_labels == 1)
                     ).item()
                     token_false_positives = torch.sum(
-                        torch.logical_and(token_preds == 1, token_actuals == 0)
+                        torch.logical_and(token_preds == 1, token_labels == 0)
                     ).item()
                     token_true_negatives = torch.sum(
-                        torch.logical_and(token_preds == 0, token_actuals == 0)
+                        torch.logical_and(token_preds == 0, token_labels == 0)
                     ).item()
                     token_false_negatives = torch.sum(
-                        torch.logical_and(token_preds == 0, token_actuals == 1)
+                        torch.logical_and(token_preds == 0, token_labels == 1)
                     ).item()
 
                     val_token_true_positives += token_true_positives
@@ -561,7 +559,6 @@ def train(args):
                 val_seq_true_negatives += seq_true_negatives
                 val_seq_false_negatives += seq_false_negatives
 
-                val_samples += len(seq_preds)
                 val_total_loss += loss.item()
                 val_batches += 1
                 val_step += 1
@@ -631,9 +628,12 @@ def train(args):
         epoch_time = epoch_end - epoch_start
 
         # Calculate validation metrics
-        seq_val_accuracy = (
-            val_seq_true_positives + val_seq_true_negatives
-        ) / val_samples
+        seq_val_accuracy = (val_seq_true_positives + val_seq_true_negatives) / (
+            val_seq_true_positives
+            + val_seq_false_positives
+            + val_seq_true_negatives
+            + val_seq_false_negatives
+        )
         seq_val_precision = val_seq_true_positives / (
             val_seq_true_positives + val_seq_false_positives + 1e-5
         )

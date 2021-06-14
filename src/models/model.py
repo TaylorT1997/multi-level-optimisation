@@ -84,196 +84,67 @@ class TokenModel(nn.Module):
             )
             print(token_attention_output)
 
-        # num_words = torch.sum(not_subword, dim=1)
-
-        # print(not_subword)
-        # print(num_words)
-
-        # word_attention_output = torch.zeros_like(token_attention_output)
         word_attention_output = token_attention_output.clone()
-
-        # token_attention_output = torch.nn.functional.pad(
-        #     token_attention_output.unsqueeze(-1), pad=(0, 5, 0, 0)
-        # )
-
-        # print(token_attention_output)
-
-        #
-
-        # not_subword = torch.where(offset_mapping[:, :, 0] == 0, x)
         individual_subword_indices = (offset_mapping[:, :, 0] != 0).nonzero(
             as_tuple=False
         )
-        # print(individual_subword_indices)
 
-        grouped_subword_indices = []
-        index_group = None
-        for i in range(len(individual_subword_indices)):
-            if index_group == None:
-                index_group = [
-                    torch.tensor(
-                        [
-                            individual_subword_indices[i][0],
-                            individual_subword_indices[i][1] - 1,
-                        ],
-                        device=self.device,
+        if individual_subword_indices.nelement() == 0:
+            pass
+        else:
+            grouped_subword_indices = []
+            index_group = None
+            for i in range(len(individual_subword_indices)):
+                if index_group == None:
+                    index_group = [
+                        torch.tensor(
+                            [
+                                individual_subword_indices[i][0],
+                                individual_subword_indices[i][1] - 1,
+                            ],
+                            device=self.device,
+                        ),
+                        individual_subword_indices[i],
+                    ]
+                    continue
+
+                if (index_group[-1][0] == (individual_subword_indices[i][0])) and (
+                    index_group[-1][1] == (individual_subword_indices[i][1] - 1)
+                ):
+                    index_group.append(individual_subword_indices[i])
+
+                else:
+                    grouped_subword_indices.append(torch.stack(index_group))
+                    index_group = [
+                        torch.tensor(
+                            [
+                                individual_subword_indices[i][0],
+                                individual_subword_indices[i][1] - 1,
+                            ],
+                            device=self.device,
+                        ),
+                        individual_subword_indices[i],
+                    ]
+            grouped_subword_indices.append(torch.stack(index_group))
+
+            for group in grouped_subword_indices:
+                replacement_index_i = group[0][0]
+                replacement_index_j = group[0][1]
+                subword_indices = torch.stack([subword[1] for subword in group])
+                subword_values = torch.index_select(
+                    torch.index_select(
+                        token_attention_output, dim=0, index=replacement_index_i,
                     ),
-                    individual_subword_indices[i],
-                ]
-                continue
-
-            if (index_group[-1][0] == (individual_subword_indices[i][0])) and (
-                index_group[-1][1] == (individual_subword_indices[i][1] - 1)
-            ):
-                index_group.append(individual_subword_indices[i])
-
-            else:
-                grouped_subword_indices.append(torch.stack(index_group))
-                index_group = [
-                    torch.tensor(
-                        [
-                            individual_subword_indices[i][0],
-                            individual_subword_indices[i][1] - 1,
-                        ],
-                        device=self.device,
-                    ),
-                    individual_subword_indices[i],
-                ]
-        grouped_subword_indices.append(torch.stack(index_group))
-
-        # print(grouped_subword_indices)
-
-        # print(grouped_subword_indices[0][0][0])
-        # print(grouped_subword_indices[0][:][1])
-
-        # print(
-        #     torch.index_select(
-        #         token_attention_output, dim=0, index=grouped_subword_indices[0][0][0],
-        #     )
-        # )
-        # indices = torch.stack([subword[1] for subword in grouped_subword_indices[0]])
-        # print(indices)
-        # print(
-        #     torch.index_select(
-        #         torch.index_select(
-        #             token_attention_output,
-        #             dim=0,
-        #             index=grouped_subword_indices[0][0][0],
-        #         ),
-        #         dim=1,
-        #         index=indices,
-        #     )
-        # )
-
-        for group in grouped_subword_indices:
-            replacement_index_i = group[0][0]
-            replacement_index_j = group[0][1]
-            subword_indices = torch.stack([subword[1] for subword in group])
-            subword_values = torch.index_select(
-                torch.index_select(
-                    token_attention_output, dim=0, index=replacement_index_i,
-                ),
-                dim=1,
-                index=subword_indices,
-            )
-            if self.subword_method == "max":
-                replacement = torch.max(subword_values)
-            elif self.subword_method == "mean":
-                replacement = torch.mean(subword_values)
-            word_attention_output[
-                replacement_index_i, replacement_index_j
-            ] = replacement
-
-        # print(token_attention_output)
-        # print(word_attention_output)
-
-        # print(grouped_subword_indices[0])
-
-        # print(
-        #     torch.index_select(
-        #         token_attention_output, dim=0, index=grouped_subword_indices[0],
-        #     )
-        # )
-
-        # sys.exit()
-
-        # for i, sequence_labels in enumerate(labels):
-        #     for j, token_label in enumerate(sequence_labels):
-        #         # Ignore first [CLS] token
-        #         if token_label == -3:
-        #             continue
-
-        #         elif token_label == 0 or token_label == 1:
-        #             if labels[i, j + 1] == -2:
-        #                 if self.subword_method == "max":
-        #                     word_attention_output[i, indices[0]] = torch.max(
-        #                         torch.index_select(
-        #                             token_attention_output[i],
-        #                             dim=0,
-        #                             index=torch.tensor(indices, device=self.device),
-        #                         )
-        #                     )
-        #             else:
-        #                 continue
-        #         elif token_label == -2:
-        #             indices.append(j)
-        #             indices = [j]
-
-        #         elif token_label == -1:
-        #             continue
-        #             # subword_values = torch.cat(
-        #             #     (subword_values, torch.tensor([token_attention_output[i, j]]),),
-        #             #     0,
-        #             # )
-
-        # print(word_attention_output)
-        # sys.exit()
-
-        # indices = None
-        # for i, sequence_offset_mapping in enumerate(offset_mapping):
-        #     for j, token_offset_mapping in enumerate(sequence_offset_mapping):
-        #         if token_offset_mapping[0] == 0:
-        #             if indices is not None:
-        #                 # Replace the first token with the max or mean
-        #                 if self.subword_method == "max":
-        #                     # print("!!!!")
-        #                     # print(
-        #                     #     torch.index_select(
-        #                     #         token_attention_output[i],
-        #                     #         dim=0,
-        #                     #         index=torch.tensor(indices, device=self.device),
-        #                     #     )
-        #                     # )
-        #                     word_attention_output[i, indices[0]] = torch.max(
-        #                         torch.index_select(
-        #                             token_attention_output[i],
-        #                             dim=0,
-        #                             index=torch.tensor(indices, device=self.device),
-        #                         )
-        #                     )
-        #                     # word_attention_output[i, first_subword] = torch.max(
-        #                     #     token_attention_output[i, first_subword:last_subword]
-        #                     # )
-        #                     # print(token_attention_output[i, first_subword:last_subword])
-
-        #                     # max_val = torch.max(final_subword)
-        #                     # token_attention_output[
-        #                     #     first_subword_i, first_subword_j
-        #                     # ] = max_val
-        #                 # elif self.subword_method == "mean":
-        #                 #     mean_val = torch.mean(final_subword)
-        #                 #     token_attention_output[
-        #                 #         first_subword_i, first_subword_j
-        #                 #     ] = mean_val
-
-        #             indices = [j]
-
-        #         else:
-        #             indices.append(j)
-        #             # subword_values = torch.cat(
-        #             #     (subword_values, torch.tensor([token_attention_output[i, j]]),),
-        #             #     0,
-        #             # )
+                    dim=1,
+                    index=subword_indices,
+                )
+                if self.subword_method == "max":
+                    replacement = torch.max(subword_values)
+                elif self.subword_method == "mean":
+                    replacement = torch.mean(subword_values)
+                word_attention_output[
+                    replacement_index_i, replacement_index_j
+                ] = replacement
 
         if self.debug:
             print("word_attention_output shape: {}".format(word_attention_output.shape))
