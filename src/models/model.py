@@ -2,14 +2,14 @@ import enum
 import torch
 import torch.nn as nn
 from transformers import (
-    BertTokenizer,
     BertConfig,
     BertModel,
     DebertaConfig,
     DebertaModel,
+    RobertaConfig,
+    RobertaModel,
 )
 import sys
-
 
 class TokenModel(nn.Module):
     def __init__(
@@ -33,6 +33,9 @@ class TokenModel(nn.Module):
         elif "deberta-base" in pretrained_model:
             model_config = DebertaConfig.from_pretrained(pretrained_model, num_labels=1)
             self.seq2seq_model = DebertaModel(model_config)
+        elif "roberta-base" in pretrained_model:
+            model_config = RobertaConfig.from_pretrained(pretrained_model, num_labels=1)
+            self.seq2seq_model = RobertaModel(model_config)
         else:
             print("Model {} not in library".format(pretrained_model))
 
@@ -49,6 +52,10 @@ class TokenModel(nn.Module):
             nn.Linear(300, 1),
             nn.Sigmoid(),
         )
+
+        # Apply weight initialisation
+        self.token_attention.apply(self._init_weights)
+        self.sentence_classification.apply(self._init_weights)
 
         self.soft_attention_beta = soft_attention_beta
         self.sentence_loss_weight = sentence_loss_weight
@@ -90,6 +97,8 @@ class TokenModel(nn.Module):
         )
 
         if individual_subword_indices.nelement() == 0:
+            print()
+            print("NO SUBWORDS DETECTED")
             pass
         else:
             grouped_subword_indices = []
@@ -349,4 +358,9 @@ class TokenModel(nn.Module):
             regularizer_loss_a,
             regularizer_loss_b,
         )
+
+    def _init_weights(self, m):
+        if type(m) == nn.Linear:
+            nn.init.xavier_uniform_(m.weight)
+            m.bias.data.fill_(0.01)
 

@@ -13,12 +13,16 @@ from torch.utils.data import DataLoader, Dataset, random_split
 from transformers import (
     BertForSequenceClassification,
     BertTokenizerFast,
+    RobertaForSequenceClassification,
+    RobertaTokenizerFast,
+    RobertaConfig,
     AdamW,
     BertConfig,
     DebertaTokenizer,
     DebertaForSequenceClassification,
     DebertaConfig,
     GPT2TokenizerFast,
+    get_linear_schedule_with_warmup
 )
 
 from data_loading.datasets import BinaryTokenTSVDataset
@@ -53,14 +57,18 @@ def train(args):
         print()
         print("Batch size: {}".format(args.batch_size))
         print("Epochs: {}".format(args.epochs))
-        print("Learning rate: {}".format(args.learning_rate))
         print("Early stopping patience: {}".format(args.early_stopping_patience))
         print("Early stopping objective: {}".format(args.early_stopping_objective))
+        print()
+        print("Learning rate: {}".format(args.learning_rate))
+        print("Learning rate weight decay: {}".format(args.lr_weight_decay))
+        print("Learning rate epsilon: {}".format(args.lr_epsilon))
         print()
         print("Optimizer: {}".format(args.lr_optimizer))
         print("Scheduler: {}".format(args.lr_scheduler))
         print("Scheduler step size: {}".format(args.lr_scheduler_step))
         print("Scheduler gamma: {}".format(args.lr_scheduler_gamma))
+        print("Scheduler warmup ratio: {}".format(args.lr_scheduler_warmup_ratio))
         print()
         print("Soft attention beta: {}".format(args.soft_attention_beta))
         print("Sentence loss weight: {}".format(args.sentence_loss_weight))
@@ -135,6 +143,28 @@ def train(args):
                 torch.nn.Sigmoid(),
             )
         tokenizer = DebertaTokenizer.from_pretrained(args.tokenizer)
+    elif "roberta-base" in args.model:
+        if args.mlo_model:
+            model = TokenModel(
+                pretrained_model=args.model,
+                soft_attention_beta=args.soft_attention_beta,
+                sentence_loss_weight=args.sentence_loss_weight,
+                token_loss_weight=args.token_loss_weight,
+                regularizer_loss_weight=args.regularizer_loss_weight,
+                token_supervision=args.token_supervision,
+                normalise_supervised_losses=args.normalise_supervised_losses,
+                normalise_regularization_losses=args.normalise_regularization_losses,
+                subword_method=args.subword_method,
+                device=device,
+            )
+        else:
+            model_config = RobertaConfig.from_pretrained(args.model, num_labels=1)
+            model = RobertaForSequenceClassification(model_config)
+            model.classifier = torch.nn.Sequential(
+                torch.nn.Linear(in_features=768, out_features=1, bias=True),
+                torch.nn.Sigmoid(),
+            )
+        tokenizer = RobertaTokenizerFast.from_pretrained(args.tokenizer, add_prefix_space=True)
 
     model.to(device)
 
@@ -155,6 +185,15 @@ def train(args):
         train_dataset, val_dataset = torch.utils.data.random_split(
             train_dataset, [num_train_samples, num_val_samples]
         )
+        # val_dataset = BinaryTokenTSVDataset(
+        #     dataset_name=args.dataset,
+        #     tokenizer=tokenizer,
+        #     root_dir=args.root,
+        #     mode="dev",
+        #     token_label_mode="first",
+        #     include_special_tokens=False,
+        # )
+
 
     else:
         val_dataset = BinaryTokenTSVDataset(
@@ -165,28 +204,40 @@ def train(args):
             token_label_mode="first",
             include_special_tokens=False,
         )
+        # val_dataset = BinaryTokenTSVDataset(
+        #     dataset_name=args.dataset,
+        #     tokenizer=tokenizer,
+        #     root_dir=args.root,
+        #     mode="test",
+        #     token_label_mode="first",
+        #     include_special_tokens=False,
+        # )
 
     train_loader = DataLoader(
         train_dataset, batch_size=args.batch_size, shuffle=True, collate_fn=collate_fn
     )
     val_loader = DataLoader(
-        val_dataset, batch_size=args.batch_size, shuffle=False, collate_fn=collate_fn
+        val_dataset, batch_size=args.batch_size * 4, shuffle=False, collate_fn=collate_fn
     )
 
     # Optimizer and scheduler
     if args.lr_optimizer == "adamw":
-        optimizer = optim.AdamW(model.parameters(), lr=args.learning_rate,)
+        optimizer = optim.AdamW(model.parameters(), lr=args.learning_rate, eps=args.lr_epsilon, weight_decay=args.lr_weight_decay)
     elif args.lr_optimizer == "adam":
-        optimizer = optim.Adam(model.parameters(), lr=args.learning_rate,)
+        optimizer = optim.Adam(model.parameters(), lr=args.learning_rate, eps=args.lr_epsilon, weight_decay=args.lr_weight_decay)
     elif args.lr_optimizer == "sgd":
         optimizer = optim.SGD(
-            model.parameters(), lr=args.learning_rate, momentum=args.lr_momentum,
+            model.parameters(), lr=args.learning_rate, momentum=args.lr_momentum, weight_decay=args.lr_weight_decay
         )
 
     if args.lr_scheduler == "steplr":
         scheduler = optim.lr_scheduler.StepLR(
             optimizer, step_size=args.lr_scheduler_step, gamma=args.lr_scheduler_gamma
         )
+    elif args.lr_scheduler == "warmup_linear":
+        warmup_steps = args.lr_scheduler_warmup_ratio * args.epochs * (len(train_dataset) // args.batch_size)
+        train_steps = (1-args.lr_scheduler_warmup_ratio) * args.epochs * (len(train_dataset) // args.batch_size)
+        scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=warmup_steps, num_training_steps=train_steps)
 
     # Record steps
     train_step = 0
@@ -292,25 +343,24 @@ def train(args):
             loss.backward()
             optimizer.step()
 
+            # Update lr scheduler
+            scheduler.step()
+
             # Calculate token prediction metrics
             if args.mlo_model:
                 token_preds = token_logits > 0.5
-                token_actuals = token_labels
-
-                token_preds = token_logits > 0.5
-                token_actuals = token_labels
 
                 token_true_positives = torch.sum(
-                    torch.logical_and(token_preds == 1, token_actuals == 1)
+                    torch.logical_and(token_preds == 1, token_labels == 1)
                 ).item()
                 token_false_positives = torch.sum(
-                    torch.logical_and(token_preds == 1, token_actuals == 0)
+                    torch.logical_and(token_preds == 1, token_labels == 0)
                 ).item()
                 token_true_negatives = torch.sum(
-                    torch.logical_and(token_preds == 0, token_actuals == 0)
+                    torch.logical_and(token_preds == 0, token_labels == 0)
                 ).item()
                 token_false_negatives = torch.sum(
-                    torch.logical_and(token_preds == 0, token_actuals == 1)
+                    torch.logical_and(token_preds == 0, token_labels == 1)
                 ).item()
 
                 train_token_true_positives += token_true_positives
@@ -344,7 +394,6 @@ def train(args):
             train_batches += 1
             train_step += 1
 
-            break
 
             if args.use_wandb:
                 if args.mlo_model:
@@ -368,7 +417,7 @@ def train(args):
             train_seq_true_positives
             + train_seq_true_negatives
             + train_seq_true_negatives
-            + train_seq_false_negatives
+            + train_seq_false_negatives + 1e-5
         )
         seq_train_precision = train_seq_true_positives / (
             train_seq_true_positives + train_seq_false_positives + 1e-5
@@ -611,8 +660,8 @@ def train(args):
                         pred_label = seq_preds[i].item()
 
                         if args.mlo_model:
-                            true_token_labels = token_actuals[i][token_actuals[i] != -1]
-                            pred_token_labels = token_preds[i][token_actuals[i] != -1]
+                            true_token_labels = token_labels[i][token_labels[i] != -1]
+                            pred_token_labels = token_preds[i][token_labels[i] != -1]
                             table.add_data(
                                 input_text,
                                 str(pred_label),
@@ -686,9 +735,6 @@ def train(args):
                     "epoch": epoch,
                 }
             )
-
-        # Update lr scheduler
-        scheduler.step()
 
         if not args.silent:
             print()
@@ -1021,6 +1067,22 @@ if __name__ == "__main__":
     )
 
     parser.add(
+        "--lr_weight_decay",
+        action="store",
+        type=float,
+        default=0.0,
+        help="Optimizer weight decay (default: 0.0)",
+    )
+
+    parser.add(
+        "--lr_epsilon",
+        action="store",
+        type=float,
+        default=1e-7,
+        help="Optimizer weight decay (default: 1e-7)",
+    )
+
+    parser.add(
         "--lr_scheduler",
         action="store",
         type=str,
@@ -1042,6 +1104,14 @@ if __name__ == "__main__":
         type=float,
         default=1,
         help="Scheduler gamma (default: 1)",
+    )
+
+    parser.add(
+        "--lr_scheduler_warmup_ratio",
+        action="store",
+        type=float,
+        default=0.1,
+        help="Scheduler warmup ratio (default: 0.1)",
     )
 
     parser.add(

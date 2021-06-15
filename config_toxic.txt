@@ -2,33 +2,36 @@
 
 root = "/home/taylort/Projects/multi-level-optimisation/"
 
-model = "bert-base-cased"
-tokenizer = "bert-base-cased"
+model = "roberta-base"
+tokenizer = "roberta-base"
 mlo_model = true
 
 dataset = "toxic"
 
-epochs = 30
+epochs = 20
 batch_size = 10
-learning_rate = 1e-5
-early_stopping_patience = 10
-early_stopping_objective = "loss"
+learning_rate = 2e-5
+early_stopping_patience = 20
+early_stopping_objective = "seq_f1"
 
 lr_optimizer = adam
 lr_momentum = 0.9
+lr_weight_decay = 0.1
+lr_epsilon = 1e-7
 
-lr_scheduler = steplr
+lr_scheduler = warmup_linear
 lr_scheduler_step = 5
 lr_scheduler_gamma = 0.1
+lr_scheduler_warmup_ratio = 0.1
 
 soft_attention_beta = 1
 sentence_loss_weight = 1
 token_loss_weight = 1
 regularizer_loss_weight = 0.1
 token_supervision = true
-normalise_supervised_losses = true
-normalise_regularization_losses = true
-subword_method = "first"
+normalise_supervised_losses = false
+normalise_regularization_losses = false
+subword_method = "max"
 
 save_model = true
 use_wandb = true
