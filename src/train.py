@@ -22,7 +22,7 @@ from transformers import (
     DebertaForSequenceClassification,
     DebertaConfig,
     GPT2TokenizerFast,
-    get_linear_schedule_with_warmup
+    get_linear_schedule_with_warmup,
 )
 
 from data_loading.datasets import BinaryTokenTSVDataset
@@ -107,6 +107,8 @@ def train(args):
                 token_loss_weight=args.token_loss_weight,
                 regularizer_loss_weight=args.regularizer_loss_weight,
                 token_supervision=args.token_supervision,
+                sequence_supervision=args.sequence_supervision,
+                regularization_losses=args.regularization_losses,
                 normalise_supervised_losses=args.normalise_supervised_losses,
                 normalise_regularization_losses=args.normalise_regularization_losses,
                 subword_method=args.subword_method,
@@ -130,6 +132,8 @@ def train(args):
                 token_loss_weight=args.token_loss_weight,
                 regularizer_loss_weight=args.regularizer_loss_weight,
                 token_supervision=args.token_supervision,
+                sequence_supervision=args.sequence_supervision,
+                regularization_losses=args.regularization_losses,
                 normalise_supervised_losses=args.normalise_supervised_losses,
                 normalise_regularization_losses=args.normalise_regularization_losses,
                 subword_method=args.subword_method,
@@ -152,6 +156,8 @@ def train(args):
                 token_loss_weight=args.token_loss_weight,
                 regularizer_loss_weight=args.regularizer_loss_weight,
                 token_supervision=args.token_supervision,
+                sequence_supervision=args.sequence_supervision,
+                regularization_losses=args.regularization_losses,
                 normalise_supervised_losses=args.normalise_supervised_losses,
                 normalise_regularization_losses=args.normalise_regularization_losses,
                 subword_method=args.subword_method,
@@ -164,7 +170,9 @@ def train(args):
                 torch.nn.Linear(in_features=768, out_features=1, bias=True),
                 torch.nn.Sigmoid(),
             )
-        tokenizer = RobertaTokenizerFast.from_pretrained(args.tokenizer, add_prefix_space=True)
+        tokenizer = RobertaTokenizerFast.from_pretrained(
+            args.tokenizer, add_prefix_space=True
+        )
 
     model.to(device)
 
@@ -185,15 +193,6 @@ def train(args):
         train_dataset, val_dataset = torch.utils.data.random_split(
             train_dataset, [num_train_samples, num_val_samples]
         )
-        # val_dataset = BinaryTokenTSVDataset(
-        #     dataset_name=args.dataset,
-        #     tokenizer=tokenizer,
-        #     root_dir=args.root,
-        #     mode="dev",
-        #     token_label_mode="first",
-        #     include_special_tokens=False,
-        # )
-
 
     else:
         val_dataset = BinaryTokenTSVDataset(
@@ -204,30 +203,43 @@ def train(args):
             token_label_mode="first",
             include_special_tokens=False,
         )
-        # val_dataset = BinaryTokenTSVDataset(
-        #     dataset_name=args.dataset,
-        #     tokenizer=tokenizer,
-        #     root_dir=args.root,
-        #     mode="test",
-        #     token_label_mode="first",
-        #     include_special_tokens=False,
-        # )
+
+    print()
+    print(f"Training on dataset of length {len(train_dataset)}")
+    print(f"Validating on dataset of length {len(val_dataset)}")
+    print()
 
     train_loader = DataLoader(
         train_dataset, batch_size=args.batch_size, shuffle=True, collate_fn=collate_fn
     )
     val_loader = DataLoader(
-        val_dataset, batch_size=args.batch_size * 4, shuffle=False, collate_fn=collate_fn
+        val_dataset,
+        batch_size=args.batch_size * 4,
+        shuffle=False,
+        collate_fn=collate_fn,
     )
 
     # Optimizer and scheduler
     if args.lr_optimizer == "adamw":
-        optimizer = optim.AdamW(model.parameters(), lr=args.learning_rate, eps=args.lr_epsilon, weight_decay=args.lr_weight_decay)
+        optimizer = optim.AdamW(
+            model.parameters(),
+            lr=args.learning_rate,
+            eps=args.lr_epsilon,
+            weight_decay=args.lr_weight_decay,
+        )
     elif args.lr_optimizer == "adam":
-        optimizer = optim.Adam(model.parameters(), lr=args.learning_rate, eps=args.lr_epsilon, weight_decay=args.lr_weight_decay)
+        optimizer = optim.Adam(
+            model.parameters(),
+            lr=args.learning_rate,
+            eps=args.lr_epsilon,
+            weight_decay=args.lr_weight_decay,
+        )
     elif args.lr_optimizer == "sgd":
         optimizer = optim.SGD(
-            model.parameters(), lr=args.learning_rate, momentum=args.lr_momentum, weight_decay=args.lr_weight_decay
+            model.parameters(),
+            lr=args.learning_rate,
+            momentum=args.lr_momentum,
+            weight_decay=args.lr_weight_decay,
         )
 
     if args.lr_scheduler == "steplr":
@@ -235,9 +247,19 @@ def train(args):
             optimizer, step_size=args.lr_scheduler_step, gamma=args.lr_scheduler_gamma
         )
     elif args.lr_scheduler == "warmup_linear":
-        warmup_steps = args.lr_scheduler_warmup_ratio * args.epochs * (len(train_dataset) // args.batch_size)
-        train_steps = (1-args.lr_scheduler_warmup_ratio) * args.epochs * (len(train_dataset) // args.batch_size)
-        scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=warmup_steps, num_training_steps=train_steps)
+        warmup_steps = (
+            args.lr_scheduler_warmup_ratio
+            * args.epochs
+            * (len(train_dataset) // args.batch_size)
+        )
+        train_steps = (
+            (1 - args.lr_scheduler_warmup_ratio)
+            * args.epochs
+            * (len(train_dataset) // args.batch_size)
+        )
+        scheduler = get_linear_schedule_with_warmup(
+            optimizer, num_warmup_steps=warmup_steps, num_training_steps=train_steps
+        )
 
     # Record steps
     train_step = 0
@@ -254,7 +276,7 @@ def train(args):
     # Early stopping
     no_improvement_num = 0
 
-    # Log and print configuration
+    # Log with wandb
     if args.use_wandb:
         wandb.init(project="multi-level-optimisation", entity="taylort1997")
         wandb.config.update(args)
@@ -284,8 +306,7 @@ def train(args):
             # Zero any accumulated gradients
             optimizer.zero_grad()
 
-            # Batch decode and encode to get correct padding for the batch
-            # decoded = tokenizer.batch_decode(sequences)
+            # Batch encode to get correct padding for the batch
             encoded_sequences = tokenizer(
                 sequences,
                 is_split_into_words=True,
@@ -394,7 +415,6 @@ def train(args):
             train_batches += 1
             train_step += 1
 
-
             if args.use_wandb:
                 if args.mlo_model:
                     wandb.log(
@@ -417,7 +437,8 @@ def train(args):
             train_seq_true_positives
             + train_seq_true_negatives
             + train_seq_true_negatives
-            + train_seq_false_negatives + 1e-5
+            + train_seq_false_negatives
+            + 1e-5
         )
         seq_train_precision = train_seq_true_positives / (
             train_seq_true_positives + train_seq_false_positives + 1e-5
@@ -510,8 +531,7 @@ def train(args):
                 # Zero any accumulated gradients
                 optimizer.zero_grad()
 
-                # Batch decode and encode to get correct padding for the batch
-                # decoded = tokenizer.batch_decode(sequences)
+                # Batch encode to get correct padding for the batch
                 encoded_sequences = tokenizer(
                     sequences,
                     is_split_into_words=True,
@@ -671,6 +691,7 @@ def train(args):
                             )
                         else:
                             table.add_data(input_text, str(pred_label), str(true_label))
+                    wandb.log({f"validation samples: {args.dataset}": table})
 
         # Epoch time
         epoch_end = time.time()
@@ -1150,7 +1171,21 @@ if __name__ == "__main__":
         "--token_supervision",
         action="store_true",
         default=False,
-        help="Use token supervision (default: True)",
+        help="Use token supervision (default: False)",
+    )
+
+    parser.add(
+        "--sequence_supervision",
+        action="store_true",
+        default=False,
+        help="Use sequence supervision (default: False)",
+    )
+
+    parser.add(
+        "--regularization_losses",
+        action="store_true",
+        default=False,
+        help="Use regularization losses (default: False)",
     )
 
     parser.add(

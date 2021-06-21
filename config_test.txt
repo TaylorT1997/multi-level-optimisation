@@ -4,8 +4,14 @@ root = "/home/tom/Projects/multi-level-optimisation/"
 
 model = "bert-base-cased"
 tokenizer = "bert-base-cased"
+mlo_model = true
 
 dataset = "conll_10"
-batch_size = 4
+batch_size = 8
 
-model_name = ""
+model_path = "/home/tom/Projects/multi-level-optimisation/models/conll_10_2021_06_21_20_26_26/model.pt"
+
+soft_attention_beta = 1
+subword_method = "max"
+
+use_wandb = false

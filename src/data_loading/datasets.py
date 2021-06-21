@@ -72,12 +72,12 @@ class BinaryTokenTSVDataset(Dataset):
         sentence_label = self.sentence_label[idx]
         token_labels = self.token_labels[idx]
 
-        if self.include_special_tokens:
-            token_labels.insert(0, sentence_label)
-            token_labels.append(sentence_label)
-        else:
-            token_labels.insert(0, -3)
-            token_labels.append(-1)
+        # if self.include_special_tokens:
+        #     token_labels.insert(0, sentence_label)
+        #     token_labels.append(sentence_label)
+        # else:
+        #     token_labels.insert(0, -3)
+        #     token_labels.append(-1)
 
         return sequence, sentence_label, token_labels
 
@@ -137,5 +137,13 @@ class BinaryTokenTSVDataset(Dataset):
                         encoded_labels.append(-2)
 
         encoded_output = [word for sublist in encoded_tokens for word in sublist]
+
+        if self.include_special_tokens:
+            encoded_labels.insert(0, encoded_labels)
+            encoded_labels.append(encoded_labels)
+        else:
+            encoded_labels.insert(0, -3)
+            encoded_labels.append(-1)
+
         return encoded_output, encoded_labels
 

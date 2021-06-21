@@ -11,6 +11,12 @@ from transformers import (
 )
 import sys
 
+
+def bmul(vec, mat, axis=0):
+    mat = mat.transpose(axis, -1)
+    return (mat * vec.expand_as(mat)).transpose(axis, -1)
+
+
 class TokenModel(nn.Module):
     def __init__(
         self,
@@ -20,6 +26,8 @@ class TokenModel(nn.Module):
         token_loss_weight=1,
         regularizer_loss_weight=0.01,
         token_supervision=True,
+        sequence_supervision=True,
+        regularization_losses=True,
         normalise_supervised_losses=False,
         normalise_regularization_losses=False,
         subword_method="max",
@@ -37,7 +45,7 @@ class TokenModel(nn.Module):
             model_config = RobertaConfig.from_pretrained(pretrained_model, num_labels=1)
             self.seq2seq_model = RobertaModel(model_config)
         else:
-            print("Model {} not in library".format(pretrained_model))
+            print(f"Model {pretrained_model} not in library")
 
         self.token_attention = nn.Sequential(
             nn.Linear(self.seq2seq_model.config.hidden_size, 100),
@@ -64,43 +72,43 @@ class TokenModel(nn.Module):
         self.normalise_supervised_losses = normalise_supervised_losses
         self.normalise_regularization_losses = normalise_regularization_losses
         self.token_supervision = token_supervision
+        self.sequence_supervision = sequence_supervision
+        self.regularization_losses = regularization_losses
         self.subword_method = subword_method
 
         self.device = device
         self.debug = debug
 
+        self.step = 0
+
     def forward(self, input_ids, attention_mask=None, offset_mapping=None, labels=None):
+
         # Pass tokens through pretrained model
         pretrained_output = self.seq2seq_model(input_ids, attention_mask)
 
         if self.debug:
             print(
-                "pretrained_output_last_hidden_state shape: {}".format(
-                    pretrained_output.last_hidden_state.shape
-                )
+                f"pretrained_output_last_hidden_state shape: \n{pretrained_output.last_hidden_state.shape}\n"
+            )
+            print(
+                f"pretrained_output_last_hidden_state: \n{pretrained_output.last_hidden_state}\n"
             )
 
         # Pass pretrained output through attention layer
         token_attention_output = self.token_attention(
             pretrained_output.last_hidden_state
-        ).squeeze()
+        ).squeeze(2)
 
         if self.debug:
-            print(
-                "token_attention_output shape: {}".format(token_attention_output.shape)
-            )
-            print(token_attention_output)
+            print(f"token_attention_output shape: \n{token_attention_output.shape}\n")
+            print(f"token_attention_output: \n{token_attention_output}\n")
 
         word_attention_output = token_attention_output.clone()
         individual_subword_indices = (offset_mapping[:, :, 0] != 0).nonzero(
             as_tuple=False
         )
 
-        if individual_subword_indices.nelement() == 0:
-            print()
-            print("NO SUBWORDS DETECTED")
-            pass
-        else:
+        if individual_subword_indices.nelement() != 0:
             grouped_subword_indices = []
             index_group = None
             for i in range(len(individual_subword_indices)):
@@ -156,13 +164,16 @@ class TokenModel(nn.Module):
                 ] = replacement
 
         if self.debug:
-            print("word_attention_output shape: {}".format(word_attention_output.shape))
-            print(word_attention_output)
+            print(f"word_attention_output shape: \n{word_attention_output.shape}\n")
+            print(f"word_attention_output: \n{word_attention_output}\n")
 
         # Mask padded tokens and subword tokens
         token_attention_mask = torch.where(
-            labels != -1, torch.ones_like(labels), torch.zeros_like(labels)
+            ((labels == 0) | (labels == 1)),
+            torch.ones_like(labels),
+            torch.zeros_like(labels),
         )
+
         not_subword = offset_mapping[:, :, 0] == 0
         subword_attention_mask = torch.where(
             not_subword, torch.ones_like(not_subword), torch.zeros_like(not_subword)
@@ -175,11 +186,9 @@ class TokenModel(nn.Module):
 
         if self.debug:
             print(
-                "masked_token_attention_output shape: {}".format(
-                    masked_token_attention_output.shape
-                )
+                f"masked_token_attention_output shape: \n{masked_token_attention_output.shape}\n"
             )
-            print(masked_token_attention_output)
+            print(f"masked_token_attention_output: \n{masked_token_attention_output}\n")
 
         # Normalise the attention output
         token_attention_output_normalised = torch.pow(
@@ -192,34 +201,69 @@ class TokenModel(nn.Module):
 
         if self.debug:
             print(
-                "token_attention_output_normalised shape: {}".format(
-                    token_attention_output_normalised.shape
-                )
+                f"token_attention_output_normalised shape: \n{token_attention_output_normalised.shape}\n"
+            )
+            print(
+                f"token_attention_output_normalised: \n{token_attention_output_normalised}\n"
             )
 
         # Apply normalised attention to pretrained output
         pretrained_output_with_attention = torch.bmm(
             pretrained_output.last_hidden_state.transpose(1, 2),
             token_attention_output_normalised.unsqueeze(2),
-        )
+        ).squeeze(2)
 
         if self.debug:
             print(
-                "pretrained_output_with_attention shape: {}".format(
-                    pretrained_output_with_attention.shape
-                )
+                f"pretrained_output_with_attention shape: \n{pretrained_output_with_attention.shape}\n"
             )
+            print(
+                f"pretrained_output_with_attention : \n{pretrained_output_with_attention}\n"
+            )
+
+        # token_attention_output_normalised_expanded = token_attention_output_normalised.unsqueeze(
+        #     2
+        # ).expand(
+        #     -1, -1, 768
+        # )
+
+        # if self.debug:
+        #     print(
+        #         f"token_attention_output_normalised_expanded shape: \n{token_attention_output_normalised_expanded.shape}\n"
+        #     )
+        #     print(
+        #         f"token_attention_output_normalised_expanded: \n{token_attention_output_normalised_expanded}\n"
+        #     )
+
+        # pretrained_output_with_attention = torch.einsum(
+        #     "bij, bij -> bij",
+        #     pretrained_output.last_hidden_state,
+        #     token_attention_output_normalised_expanded,
+        # )
+
+        # pretrained_output_with_attention_summed = torch.sum(
+        #     pretrained_output_with_attention, dim=1
+        # )
+
+        # if self.debug:
+        #     print(
+        #         f"pretrained_output_with_attention_summed shape: \n{pretrained_output_with_attention_summed.shape}\n"
+        #     )
+        #     print(
+        #         f"pretrained_output_with_attention_summed : \n{pretrained_output_with_attention_summed}\n"
+        #     )
 
         # Pass pretrained output with attention through sentence classifiaction layer
         sentence_classification_output = self.sentence_classification(
-            pretrained_output_with_attention.squeeze()
+            pretrained_output_with_attention
         )
 
         if self.debug:
             print(
-                "sentence_classification_output shape: {}\n".format(
-                    sentence_classification_output.shape
-                )
+                f"sentence_classification_output shape: \n{sentence_classification_output.shape}\n"
+            )
+            print(
+                f"sentence_classification_output: \n{sentence_classification_output}\n"
             )
 
         # Calculate the model loss
@@ -230,10 +274,7 @@ class TokenModel(nn.Module):
             regularizer_loss_a,
             regularizer_loss_b,
         ) = self._calculate_loss(
-            offset_mapping,
-            masked_token_attention_output,
-            sentence_classification_output,
-            labels,
+            masked_token_attention_output, sentence_classification_output, labels,
         )
 
         output = {
@@ -250,29 +291,13 @@ class TokenModel(nn.Module):
         return output
 
     def _calculate_loss(
-        self,
-        offset_mapping,
-        token_attention_output,
-        sentence_classification_output,
-        labels,
+        self, token_attention_output, sentence_classification_output, labels,
     ):
         if self.debug:
-            print("token_attention_output: {}".format(token_attention_output))
-            print(
-                "sentence_classification_output: {}".format(
-                    sentence_classification_output
-                )
-            )
-            print("labels: {}".format(labels))
-            print(
-                "token_attention_output shape: {}".format(token_attention_output.shape)
-            )
-            print(
-                "sentence_classification_output shape: {}".format(
-                    sentence_classification_output.shape
-                )
-            )
-            print("labels shape: {}".format(labels.shape))
+            print(f"token_attention_output: \n{token_attention_output}\n")
+            print(f"token_attention_output shape: \n{token_attention_output.shape}\n")
+            print(f"labels: \n{labels}\n")
+            print(f"labels shape: \n{labels.shape}\n")
 
         # Get batch size
         batch_size = labels.shape[0]
@@ -281,8 +306,8 @@ class TokenModel(nn.Module):
         sentence_labels = torch.max(labels, dim=1, keepdim=True).values
 
         if self.debug:
-            print("sentence_labels: {}".format(sentence_labels))
-            print("sentence_labels shape: {}".format(sentence_labels.shape))
+            print(f"sentence_labels: \n{sentence_labels}\n")
+            print(f"sentence_labels shape: \n{sentence_labels.shape}\n")
 
         # Calculate the sentence MSE loss
         mse_loss = nn.MSELoss(reduction="sum")
@@ -293,13 +318,22 @@ class TokenModel(nn.Module):
         zero_labels = torch.where(labels == 1, labels, torch.zeros_like(labels))
         token_loss = mse_loss(token_attention_output, zero_labels)
 
-        # print("DEBUG!!!!!!!!!!")
-        # print(labels)
-        # print(zero_labels)
-        # print(token_loss)
-        # print("DEBUG!!!!!!!!!!")
+        if self.debug:
+            print(f"zero_labels: \n{zero_labels}\n")
+            print(f"zero_labels shape: \n{zero_labels.shape}\n")
 
-        # Normalise the MSE losses (optionally)
+        # if self.step % 50 == 0:
+        #     print(f"token_attention_output")
+        #     print(token_attention_output)
+        #     print(f"labels:")
+        #     print(labels)
+        #     print(f"zero_labels:")
+        #     print(zero_labels)
+        #     print(f"token_loss:")
+        #     print(token_loss)
+        # self.step += 1
+
+        # Normalise the MSE losses (optionally)+
         if self.normalise_supervised_losses:
             sentence_loss = sentence_loss / batch_size
             token_loss = token_loss / batch_size
@@ -328,10 +362,10 @@ class TokenModel(nn.Module):
         )
 
         if self.debug:
-            print("sentence_loss: {}".format(sentence_loss))
-            print("token_loss: {}".format(token_loss))
-            print("regularizer_loss_a: {}".format(regularizer_loss_a))
-            print("regularizer_loss_b: {}".format(regularizer_loss_b))
+            print(f"sentence_loss: \n{sentence_loss}\n")
+            print(f"token_loss: \n{token_loss}\n")
+            print(f"regularizer_loss_a: \n{regularizer_loss_a}\n")
+            print(f"regularizer_loss_b: \n{regularizer_loss_b}\n")
 
         # Combine regularize losses and (optionally) normalise
         regularizer_losses = regularizer_loss_a + regularizer_loss_b
@@ -343,13 +377,28 @@ class TokenModel(nn.Module):
         token_loss_weighted = token_loss * self.token_loss_weight
         regularizer_loss_weighted = regularizer_losses * self.regularizer_loss_weight
 
-        # Calculate total loss
         if self.token_supervision:
-            total_loss = (
-                sentence_loss_weighted + token_loss_weighted + regularizer_loss_weighted
+            token_loss_weighted = token_loss * self.token_loss_weight
+        else:
+            token_loss_weighted = 0
+        if self.sequence_supervision:
+            sentence_loss_weighted = token_loss * self.token_loss_weight
+        else:
+            sentence_loss_weighted = 0
+        if self.regularization_losses:
+            regularizer_loss_weighted = (
+                regularizer_losses * self.regularizer_loss_weight
             )
         else:
-            total_loss = sentence_loss_weighted + regularizer_loss_weighted
+            regularizer_loss_weighted = 0
+
+        # Calculate total loss
+        total_loss = (
+            sentence_loss_weighted + token_loss_weighted + regularizer_loss_weighted
+        )
+
+        if self.debug:
+            print(f"total_loss: \n{total_loss}\n")
 
         return (
             total_loss,
@@ -363,4 +412,3 @@ class TokenModel(nn.Module):
         if type(m) == nn.Linear:
             nn.init.xavier_uniform_(m.weight)
             m.bias.data.fill_(0.01)
-
