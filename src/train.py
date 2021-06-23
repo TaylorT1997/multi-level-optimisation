@@ -30,6 +30,7 @@ from models.model import TokenModel
 
 import wandb
 
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 def collate_fn(batch):
     sequences, labels, token_labels = [], [], []
@@ -187,11 +188,13 @@ def train(args):
     )
 
     if "wi_locness" in args.dataset:
+        data_split_generator = torch.Generator(device)
+        data_split_generator.manual_seed(666)
         dataset_len = len(train_dataset)
         num_train_samples = math.ceil(dataset_len * 0.8)
         num_val_samples = math.floor(dataset_len * 0.2)
         train_dataset, val_dataset = torch.utils.data.random_split(
-            train_dataset, [num_train_samples, num_val_samples]
+            train_dataset, [num_train_samples, num_val_samples], generator=data_split_generator
         )
 
     else:
@@ -419,17 +422,17 @@ def train(args):
                 if args.mlo_model:
                     wandb.log(
                         {
-                            "step_loss_train": loss.item(),
-                            "sentence_loss_train": sentence_loss.item(),
-                            "token_loss_train": token_loss.item(),
-                            "regularizer_loss_a_train": regularizer_loss_a.item(),
-                            "regularizer_loss_b_train": regularizer_loss_b.item(),
+                            "train_losses/total_loss": loss.item(),
+                            "train_losses/sequence_loss": sentence_loss.item(),
+                            "train_losses/token_loss": token_loss.item(),
+                            "train_losses/regularizer_loss_a": regularizer_loss_a.item(),
+                            "train_losses/regularizer_loss_b": regularizer_loss_b.item(),
                             "train_step": train_step,
                         }
                     )
                 else:
                     wandb.log(
-                        {"step_loss_train": loss.item(), "train_step": train_step,}
+                        {"train_losses/total_loss": loss.item(), "train_step": train_step,}
                     )
 
         # Calculate training metrics
@@ -475,22 +478,22 @@ def train(args):
             0.25 * token_train_precision + token_train_recall + 1e-5
         )
 
-        train_av_loss = train_total_loss / train_batches
+        train_av_loss = train_total_loss / (train_batches + 1e-5)
 
         if args.use_wandb:
             wandb.log(
                 {
-                    "epoch_loss_train": train_av_loss,
-                    "epoch_seq_accuracy_train": seq_train_accuracy,
-                    "epoch_seq_precision_train": seq_train_precision,
-                    "epoch_seq_recall_train": seq_train_recall,
-                    "epoch_seq_f1_train": seq_train_f1,
-                    "epoch_seq_f0.5_train": seq_train_f05,
-                    "epoch_token_accuracy_train": token_train_accuracy,
-                    "epoch_token_precision_train": token_train_precision,
-                    "epoch_token_recall_train": token_train_recall,
-                    "epoch_token_f1_train": token_train_f1,
-                    "epoch_token_f0.5_train": token_train_f05,
+                    "train_losses/average_loss": train_av_loss,
+                    "train_metrics/sequence_accuracy": seq_train_accuracy,
+                    "train_metrics/sequence_precision": seq_train_precision,
+                    "train_metrics/sequence_recall": seq_train_recall,
+                    "train_metrics/sequence_f1": seq_train_f1,
+                    "train_metrics/sequence_f0.5": seq_train_f05,
+                    "train_metrics/token_accuracy": token_train_accuracy,
+                    "train_metrics/token_precision": token_train_precision,
+                    "train_metrics/token_recall": token_train_recall,
+                    "train_metrics/token_f1": token_train_f1,
+                    "train_metrics/token_f0.5": token_train_f05,
                     "epoch": epoch,
                 }
             )
@@ -636,18 +639,18 @@ def train(args):
                     if args.mlo_model:
                         wandb.log(
                             {
-                                "step_loss_val": loss.item(),
-                                "sentence_loss_val": sentence_loss.item(),
-                                "token_loss_val": token_loss.item(),
-                                "regularizer_loss_a_val": regularizer_loss_a.item(),
-                                "regularizer_loss_b_val": regularizer_loss_b.item(),
+                                "val_losses/total_loss": loss.item(),
+                                "val_losses/sequence_loss": sentence_loss.item(),
+                                "val_losses/token_loss": token_loss.item(),
+                                "val_losses/regularizer_loss_a": regularizer_loss_a.item(),
+                                "val_losses/regularizer_loss_b": regularizer_loss_b.item(),
                                 "val_step": val_step,
                             }
                         )
                     else:
                         wandb.log(
-                            {"step_loss_val": loss.item(), "val_step": val_step,}
-                        )
+                            {"val_losses/total_loss": loss.item(), "val_step": val_step,}
+                    )
 
                     for i in range(len(labels)):
                         if "deberta" in args.tokenizer:
@@ -676,18 +679,18 @@ def train(args):
                                 skip_special_tokens=True,
                                 clean_up_tokenization_spaces=True,
                             )
-                        true_label = seq_actuals[i].item()
-                        pred_label = seq_preds[i].item()
+                        true_label = seq_actuals[i].long().item()
+                        pred_label = seq_preds[i].long().item()
 
                         if args.mlo_model:
-                            true_token_labels = token_labels[i][token_labels[i] != -1]
-                            pred_token_labels = token_preds[i][token_labels[i] != -1]
+                            true_token_labels = token_labels[i][(token_labels[i] == 0) | (token_labels[i] == 1)].long().cpu().detach().numpy()
+                            pred_token_labels = token_preds[i][(token_labels[i] == 0) | (token_labels[i] == 1)].long().cpu().detach().numpy()
                             table.add_data(
                                 input_text,
+                                str(pred_token_labels)[1:-1],
+                                str(true_token_labels)[1:-1],
                                 str(pred_label),
                                 str(true_label),
-                                str(pred_token_labels),
-                                str(true_token_labels),
                             )
                         else:
                             table.add_data(input_text, str(pred_label), str(true_label))
@@ -738,21 +741,21 @@ def train(args):
         )
 
         val_av_loss = val_total_loss / val_batches
-
+        
         if args.use_wandb:
             wandb.log(
                 {
-                    "epoch_loss_val": val_av_loss,
-                    "epoch_seq_accuracy_val": seq_val_accuracy,
-                    "epoch_seq_precision_val": seq_val_precision,
-                    "epoch_seq_recall_val": seq_val_recall,
-                    "epoch_seq_f1_val": seq_val_f1,
-                    "epoch_seq_f0.5_val": seq_val_f05,
-                    "epoch_token_accuracy_val": token_val_accuracy,
-                    "epoch_token_precision_val": token_val_precision,
-                    "epoch_token_recall_val": token_val_recall,
-                    "epoch_token_f1_val": token_val_f1,
-                    "epoch_token_f0.5_val": token_val_f05,
+                    "val_losses/average_loss": val_av_loss,
+                    "val_metrics/sequence_accuracy": seq_val_accuracy,
+                    "val_metrics/sequence_precision": seq_val_precision,
+                    "val_metrics/sequence_recall": seq_val_recall,
+                    "val_metrics/sequence_f1": seq_val_f1,
+                    "val_metrics/sequence_f0.5": seq_val_f05,
+                    "val_metrics/token_accuracy": token_val_accuracy,
+                    "val_metrics/token_precision": token_val_precision,
+                    "val_metrics/token_recall": token_val_recall,
+                    "val_metrics/token_f1": token_val_f1,
+                    "val_metrics/token_f0.5": token_val_f05,
                     "epoch": epoch,
                 }
             )
@@ -772,12 +775,6 @@ def train(args):
             print("Training sequence f1: {:.4f}".format(seq_train_f1))
             print("Training sequence f0.5: {:.4f}".format(seq_train_f05))
             print()
-            print("Validation sequence accuracy: {:.4f}".format(seq_val_accuracy))
-            print("Validation sequence precision: {:.4f}".format(seq_val_precision))
-            print("Validation sequence recall: {:.4f}".format(seq_val_recall))
-            print("Validation sequence f1: {:.4f}".format(seq_val_f1))
-            print("Validation sequence f0.5: {:.4f}".format(seq_val_f05))
-            print()
             if args.mlo_model:
                 print("Training token accuracy: {:.4f}".format(token_train_accuracy))
                 print("Training token precision: {:.4f}".format(token_train_precision))
@@ -785,6 +782,13 @@ def train(args):
                 print("Training token f1: {:.4f}".format(token_train_f1))
                 print("Training token f0.5: {:.4f}".format(token_train_f05))
                 print()
+            print("Validation sequence accuracy: {:.4f}".format(seq_val_accuracy))
+            print("Validation sequence precision: {:.4f}".format(seq_val_precision))
+            print("Validation sequence recall: {:.4f}".format(seq_val_recall))
+            print("Validation sequence f1: {:.4f}".format(seq_val_f1))
+            print("Validation sequence f0.5: {:.4f}".format(seq_val_f05))
+            print()
+            if args.mlo_model:
                 print("Validation token accuracy: {:.4f}".format(token_val_accuracy))
                 print("Validation token precision: {:.4f}".format(token_val_precision))
                 print("Validation token recall: {:.4f}".format(token_val_recall))
@@ -860,28 +864,28 @@ def train(args):
             wandb.log(
                 {
                     "best_epoch": best_epoch,
-                    "best_train_loss": best_train_loss,
-                    "best_seq_train_accuracy": best_seq_train_accuracy,
-                    "best_seq_train_precision": best_seq_train_precision,
-                    "best_seq_train_recall": best_seq_train_recall,
-                    "best_seq_train_f1": best_seq_train_f1,
-                    "best_train_seq_f0.5": best_seq_train_f05,
-                    "best_val_loss": best_val_loss,
-                    "best_seq_val_accuracy": best_seq_val_accuracy,
-                    "best_seq_val_precision": best_seq_val_precision,
-                    "best_seq_val_recall": best_seq_val_recall,
-                    "best_seq_val_f1": best_seq_val_f1,
-                    "best_seq_val_f0.5": best_seq_val_f05,
-                    "best_token_train_accuracy": best_token_train_accuracy,
-                    "best_token_train_precision": best_token_train_precision,
-                    "best_token_train_recall": best_token_train_recall,
-                    "best_token_train_f1": best_token_train_f1,
-                    "best_token_train_f0.5": best_token_train_f05,
-                    "best_token_val_accuracy": best_token_val_accuracy,
-                    "best_token_val_precision": best_token_val_precision,
-                    "best_token_val_recall": best_token_val_recall,
-                    "best_token_val_f1": best_token_val_f1,
-                    "best_token_val_f0.5": best_token_val_f05,
+                    "train_summary_metrics/best_average_loss": best_train_loss,
+                    "train_summary_metrics/best_sequence_accuracy": best_seq_train_accuracy,
+                    "train_summary_metrics/best_sequence_precision": best_seq_train_precision,
+                    "train_summary_metrics/best_sequence_recall": best_seq_train_recall,
+                    "train_summary_metrics/best_sequence_f1": best_seq_train_f1,
+                    "train_summary_metrics/best_sequence_f0.5": best_seq_train_f05,
+                    "val_summary_metrics/best_average_loss": best_val_loss,
+                    "val_summary_metrics/best_sequence_accuracy": best_seq_val_accuracy,
+                    "val_summary_metrics/best_sequence_precision": best_seq_val_precision,
+                    "val_summary_metrics/best_sequence_recall": best_seq_val_recall,
+                    "val_summary_metrics/best_sequence_f1": best_seq_val_f1,
+                    "val_summary_metrics/best_sequence_f0.5": best_seq_val_f05,
+                    "train_summary_metrics/best_token_accuracy": best_token_train_accuracy,
+                    "train_summary_metrics/best_token_precision": best_token_train_precision,
+                    "train_summary_metrics/best_token_recall": best_token_train_recall,
+                    "train_summary_metrics/best_token_f1": best_token_train_f1,
+                    "train_summary_metrics/best_token_f0.5": best_token_train_f05,
+                    "val_summary_metrics/best_token_accuracy": best_token_val_accuracy,
+                    "val_summary_metrics/best_token_precision": best_token_val_precision,
+                    "val_summary_metrics/best_token_recall": best_token_val_recall,
+                    "val_summary_metrics/best_token_f1": best_token_val_f1,
+                    "val_summary_metrics/best_token_f0.5": best_token_val_f05,
                     "training_time": training_time,
                 }
             )
@@ -889,18 +893,18 @@ def train(args):
             wandb.log(
                 {
                     "best_epoch": best_epoch,
-                    "best_train_loss": best_train_loss,
-                    "best_seq_train_accuracy": best_seq_train_accuracy,
-                    "best_seq_train_precision": best_seq_train_precision,
-                    "best_seq_train_recall": best_seq_train_recall,
-                    "best_seq_train_f1": best_seq_train_f1,
-                    "best_train_seq_f0.5": best_seq_train_f05,
-                    "best_val_loss": best_val_loss,
-                    "best_seq_val_accuracy": best_seq_val_accuracy,
-                    "best_seq_val_precision": best_seq_val_precision,
-                    "best_seq_val_recall": best_seq_val_recall,
-                    "best_seq_val_f1": best_seq_val_f1,
-                    "best_seq_val_f0.5": best_seq_val_f05,
+                    "train_summary_metrics/best_average_loss": best_train_loss,
+                    "train_summary_metrics/best_sequence_accuracy": best_seq_train_accuracy,
+                    "train_summary_metrics/best_sequence_precision": best_seq_train_precision,
+                    "train_summary_metrics/best_sequence_recall": best_seq_train_recall,
+                    "train_summary_metrics/best_sequence_f1": best_seq_train_f1,
+                    "train_summary_metrics/best_sequence_f0.5": best_seq_train_f05,
+                    "val_summary_metrics/best_average_loss": best_val_loss,
+                    "val_summary_metrics/best_sequence_accuracy": best_seq_val_accuracy,
+                    "val_summary_metrics/best_sequence_precision": best_seq_val_precision,
+                    "val_summary_metrics/best_sequence_recall": best_seq_val_recall,
+                    "val_summary_metrics/best_sequence_f1": best_seq_val_f1,
+                    "val_summary_metrics/best_sequence_f0.5": best_seq_val_f05,
                     "training_time": training_time,
                 }
             )

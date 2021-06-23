@@ -322,17 +322,6 @@ class TokenModel(nn.Module):
             print(f"zero_labels: \n{zero_labels}\n")
             print(f"zero_labels shape: \n{zero_labels.shape}\n")
 
-        # if self.step % 50 == 0:
-        #     print(f"token_attention_output")
-        #     print(token_attention_output)
-        #     print(f"labels:")
-        #     print(labels)
-        #     print(f"zero_labels:")
-        #     print(zero_labels)
-        #     print(f"token_loss:")
-        #     print(token_loss)
-        # self.step += 1
-
         # Normalise the MSE losses (optionally)+
         if self.normalise_supervised_losses:
             sentence_loss = sentence_loss / batch_size
@@ -368,21 +357,18 @@ class TokenModel(nn.Module):
             print(f"regularizer_loss_b: \n{regularizer_loss_b}\n")
 
         # Combine regularize losses and (optionally) normalise
-        regularizer_losses = regularizer_loss_a + regularizer_loss_b
         if self.normalise_regularization_losses:
-            regularizer_losses = regularizer_losses / batch_size
+            regularizer_loss_a = regularizer_loss_a / batch_size
+            regularizer_loss_b = regularizer_loss_b / batch_size
+        regularizer_losses = regularizer_loss_a + regularizer_loss_b
 
         # Apply loss weights
-        sentence_loss_weighted = sentence_loss * self.sentence_loss_weight
-        token_loss_weighted = token_loss * self.token_loss_weight
-        regularizer_loss_weighted = regularizer_losses * self.regularizer_loss_weight
-
         if self.token_supervision:
             token_loss_weighted = token_loss * self.token_loss_weight
         else:
             token_loss_weighted = 0
         if self.sequence_supervision:
-            sentence_loss_weighted = token_loss * self.token_loss_weight
+            sentence_loss_weighted = sentence_loss * self.sentence_loss_weight
         else:
             sentence_loss_weighted = 0
         if self.regularization_losses:
