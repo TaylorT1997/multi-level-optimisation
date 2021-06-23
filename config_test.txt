@@ -1,15 +1,15 @@
 # Config settings for train.py
 
-root = "/home/tom/Projects/multi-level-optimisation/"
+root = "/home/taylort/Projects/multi-level-optimisation/"
 
 model = "bert-base-cased"
 tokenizer = "bert-base-cased"
 mlo_model = true
 
-dataset = "conll_10"
-batch_size = 8
+dataset = "fce"
+batch_size = 64
 
-model_path = "/home/tom/Projects/multi-level-optimisation/models/conll_10_2021_06_21_20_26_26/model.pt"
+model_path = "/home/taylort/Projects/multi-level-optimisation/models/fce_2021_06_23_12_29_50/model.pt"
 
 soft_attention_beta = 1
 subword_method = "max"

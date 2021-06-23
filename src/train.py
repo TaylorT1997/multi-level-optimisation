@@ -188,7 +188,7 @@ def train(args):
     )
 
     if "wi_locness" in args.dataset:
-        data_split_generator = torch.Generator(device)
+        data_split_generator = torch.Generator()
         data_split_generator.manual_seed(666)
         dataset_len = len(train_dataset)
         num_train_samples = math.ceil(dataset_len * 0.8)
@@ -845,7 +845,7 @@ def train(args):
                 best_token_val_f1 = token_val_f1
                 best_token_val_f05 = token_val_f05
 
-            no_improvements_num = 0
+            no_improvement_num = 0
 
             if args.save_model:
                 torch.save(model.state_dict(), os.path.join(model_dir, "model.pt"))

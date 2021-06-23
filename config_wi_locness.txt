@@ -8,11 +8,11 @@ mlo_model = true
 
 dataset = "wi_locness"
 
-epochs = 20
+epochs = 30
 batch_size = 16
 learning_rate = 2e-5
-early_stopping_patience = 20
-early_stopping_objective = "loss"
+early_stopping_patience = 10
+early_stopping_objective = "token_f1"
 
 lr_optimizer = adam
 lr_momentum = 0.9
@@ -33,7 +33,7 @@ normalise_regularization_losses = true
 subword_method = "max"
 
 token_supervision = true
-sequence_supervision = true
+sequence_supervision = false
 regularization_losses = true
 
 save_model = true
