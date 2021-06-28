@@ -1,48 +1,45 @@
 program: train.py
-method: bayes
+method: grid
 metric:
-  name: epoch_token_f1_val
-  goal: maximize
+  name: val_summary_metrics/best_average_loss
+  goal: minimize
 parameters:
-  root:
-    value: /home/taylort/Projects/multi-level-optimisation/
-  model:
-    value: bert-base-cased
-  epochs:
-    value: 15
-  dataset:
-    value: conll_10
-  tokenizer:
-    value: bert-base-cased
-  batch_size:
-    value: 8
-  max_seq_length:
-    value: 256
-  learning_rate:
-    min: 1e-7
-    max: 1e-3
-  lr_optimizer:
+  config:
+    distribution: categorical
     values:
-      - adam
-      - adamw
-      - sgd
-  lr_momentum:
-    distribution: uniform
-    min: 0.0
-    max: 1.0
-  lr_weight_decay:
-    distribution: uniform
-    min: 0.0
-    max: 0.5
-  lr_scheduler:
-    value: steplr
-  lr_scheduler_step:
-    distribution: int_uniform
-    min: 1
-    max: 5
-  lr_scheduler_gamma:
-    distribution: uniform
-    min: 0.0
-    max: 1.0
-  early_stopping_patience:
-    value: 15
+      - ../config_conll10.txt
+      - ../config_fce.txt
+      - ../config_wi_locness.txt
+  subword_method:
+    distribution: categorical
+    values:
+      - max
+      - first
+      - mean
+  sentence_loss_weight:
+    distribution: categorical
+    values:
+      - 0.0
+      - 0.001
+      - 0.01
+      - 0.1
+      - 0.5
+      - 1.0
+  regularizer_loss_weight:
+    distribution: categorical
+    values:
+      - 0.0
+      - 0.001
+      - 0.01
+      - 0.1
+      - 0.5
+      - 1.0
+  token_loss_weight:
+    distribution: categorical
+    values:
+      - 0.0
+      - 0.001
+      - 0.01
+      - 0.1
+      - 0.5
+      - 1.0

@@ -108,7 +108,7 @@ class TokenModel(nn.Module):
             as_tuple=False
         )
 
-        if individual_subword_indices.nelement() != 0:
+        if individual_subword_indices.nelement() != 0 and self.subword_method != "first":
             grouped_subword_indices = []
             index_group = None
             for i in range(len(individual_subword_indices)):

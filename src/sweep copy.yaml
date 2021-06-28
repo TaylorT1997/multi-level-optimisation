@@ -1,0 +1,73 @@
+program: train.py
+method: bayes
+metric:
+  name: best_seq_val_f1
+  goal: maximize
+parameters:
+  config:
+    value: ../config_conll10.txt
+  lr_optimizer:
+    distribution: categorical
+    values:
+      - adam
+      - adamw
+  lr_scheduler:
+    distribution: categorical
+    values:
+      - steplr
+      - warmup_linear
+  learning_rate:
+    distribution: categorical
+    values:
+      - 1e-7
+      - 5e-7
+      - 1e-6
+      - 5e-6
+      - 8e-6
+      - 1e-5
+      - 3e-5
+      - 5e-5
+      - 1e-4
+      - 5e-4
+  subword_method:
+    distribution: categorical
+    values:
+      - max
+      - first
+      - mean
+  lr_weight_decay:
+    distribution: uniform
+    min: 0.0
+    max: 0.2
+  lr_scheduler_step:
+    distribution: int_uniform
+    min: 2
+    max: 5
+  lr_scheduler_gamma:
+    distribution: categorical
+    values:
+      - 0.1
+      - 0.2
+      - 0.3
+      - 0.4
+      - 0.5
+  sentence_loss_weight:
+    distribution: categorical
+    values:
+      - 1.0
+  regularizer_loss_weight:
+    distribution: uniform
+    min: 0
+    max: 2
+  token_loss_weight:
+    distribution: uniform
+    min: 0
+    max: 2
+  lr_scheduler_warmup_ratio:
+    distribution: categorical
+    values:
+      - 0.1
+      - 0.2
+      - 0.3
+      - 0.4
+      - 0.5

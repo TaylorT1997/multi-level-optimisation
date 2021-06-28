@@ -22,6 +22,7 @@ from transformers import (
     DebertaForSequenceClassification,
     DebertaConfig,
     GPT2TokenizerFast,
+    RobertaTokenizer,
     get_linear_schedule_with_warmup,
 )
 
@@ -171,8 +172,8 @@ def train(args):
                 torch.nn.Linear(in_features=768, out_features=1, bias=True),
                 torch.nn.Sigmoid(),
             )
-        tokenizer = RobertaTokenizerFast.from_pretrained(
-            args.tokenizer, add_prefix_space=True
+        tokenizer = RobertaTokenizer.from_pretrained(
+            args.tokenizer, 
         )
 
     model.to(device)
