@@ -36,5 +36,5 @@ token_supervision = true
 sequence_supervision = false
 regularization_losses = true
 
-save_model = true
+save_model = false
 use_wandb = false

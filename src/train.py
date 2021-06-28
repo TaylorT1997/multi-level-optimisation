@@ -195,7 +195,9 @@ def train(args):
         num_train_samples = math.ceil(dataset_len * 0.8)
         num_val_samples = math.floor(dataset_len * 0.2)
         train_dataset, val_dataset = torch.utils.data.random_split(
-            train_dataset, [num_train_samples, num_val_samples], generator=data_split_generator
+            train_dataset,
+            [num_train_samples, num_val_samples],
+            generator=data_split_generator,
         )
 
     else:
@@ -433,7 +435,10 @@ def train(args):
                     )
                 else:
                     wandb.log(
-                        {"train_losses/total_loss": loss.item(), "train_step": train_step,}
+                        {
+                            "train_losses/total_loss": loss.item(),
+                            "train_step": train_step,
+                        }
                     )
 
         # Calculate training metrics
@@ -650,8 +655,11 @@ def train(args):
                         )
                     else:
                         wandb.log(
-                            {"val_losses/total_loss": loss.item(), "val_step": val_step,}
-                    )
+                            {
+                                "val_losses/total_loss": loss.item(),
+                                "val_step": val_step,
+                            }
+                        )
 
                     for i in range(len(labels)):
                         if "deberta" in args.tokenizer:
@@ -684,8 +692,24 @@ def train(args):
                         pred_label = seq_preds[i].long().item()
 
                         if args.mlo_model:
-                            true_token_labels = token_labels[i][(token_labels[i] == 0) | (token_labels[i] == 1)].long().cpu().detach().numpy()
-                            pred_token_labels = token_preds[i][(token_labels[i] == 0) | (token_labels[i] == 1)].long().cpu().detach().numpy()
+                            true_token_labels = (
+                                token_labels[i][
+                                    (token_labels[i] == 0) | (token_labels[i] == 1)
+                                ]
+                                .long()
+                                .cpu()
+                                .detach()
+                                .numpy()
+                            )
+                            pred_token_labels = (
+                                token_preds[i][
+                                    (token_labels[i] == 0) | (token_labels[i] == 1)
+                                ]
+                                .long()
+                                .cpu()
+                                .detach()
+                                .numpy()
+                            )
                             table.add_data(
                                 input_text,
                                 str(pred_token_labels)[1:-1],
@@ -742,7 +766,7 @@ def train(args):
         )
 
         val_av_loss = val_total_loss / val_batches
-        
+
         if args.use_wandb:
             wandb.log(
                 {
