@@ -562,9 +562,8 @@ def train(args):
                     truncation=True,
                     return_tensors="pt",
                     return_offsets_mapping=True,
+                    max_length=args.max_sequence_length,
                 )
-
-                print(sequences)
 
                 # Pad token labels
                 max_length = 0
@@ -837,6 +836,7 @@ def train(args):
                 print("Validation token f0.5: {:.4f}".format(token_val_f05))
                 print()
 
+            print("Learning rate value: {}".format(scheduler.get_lr()))
             print("Epoch time: {:.0f}".format(epoch_time))
 
         if args.early_stopping_objective == "loss":

@@ -13,11 +13,11 @@ epochs = 20
 batch_size = 16
 learning_rate = 2e-5
 early_stopping_patience = 7
-early_stopping_objective = "loss"
+early_stopping_objective = "seq_f1"
 
 lr_optimizer = adamw
 lr_momentum = 0.9
-lr_weight_decay = 0.02
+lr_weight_decay = 0.1
 lr_epsilon = 1e-7
 
 lr_scheduler = warmup_linear
@@ -26,7 +26,7 @@ lr_scheduler_warmup_ratio = 0.1
 lr_scheduler_step = 5
 lr_scheduler_gamma = 0.1
 
-max_sequence_length = 126
+max_sequence_length = 512
 soft_attention_beta = 1
 sentence_loss_weight = 1
 token_loss_weight = 1
@@ -39,5 +39,5 @@ token_supervision = false
 sequence_supervision = true
 regularization_losses = true
 
-save_model = true
-use_wandb = false
+save_model = false
+use_wandb = true

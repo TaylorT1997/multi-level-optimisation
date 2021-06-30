@@ -49,19 +49,16 @@ class TokenModel(nn.Module):
             print(f"Model {pretrained_model} not in library")
 
         self.token_attention = nn.Sequential(
-            # nn.Dropout(dropout),
+            nn.Dropout(dropout),
             nn.Linear(self.seq2seq_model.config.hidden_size, 100),
             nn.Tanh(),
-            # nn.Dropout(dropout),
             nn.Linear(100, 1),
             nn.Sigmoid(),
         )
 
         self.sentence_classification = nn.Sequential(
-            # nn.Dropout(dropout),
             nn.Linear(self.seq2seq_model.config.hidden_size, 300),
             nn.Tanh(),
-            # nn.Dropout(dropout),
             nn.Linear(300, 1),
             nn.Sigmoid(),
         )
