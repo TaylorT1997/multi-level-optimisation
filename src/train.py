@@ -33,6 +33,7 @@ import wandb
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
+
 def collate_fn(batch):
     sequences, labels, token_labels = [], [], []
     for sequence, label, token_label in batch:
@@ -46,6 +47,11 @@ def train(args):
     torch.manual_seed(666)
 
     if not args.silent:
+        if args.debug:
+            print("!" * 30)
+            print("!" * 5 + " DEBUG MODE ENABLED " + "!" * 5)
+            print("!" * 30)
+            print()
         print("*" * 30)
         print(
             "Training: {}".format(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
@@ -72,6 +78,7 @@ def train(args):
         print("Scheduler gamma: {}".format(args.lr_scheduler_gamma))
         print("Scheduler warmup ratio: {}".format(args.lr_scheduler_warmup_ratio))
         print()
+        print("Maximum sequence length: {}".format(args.max_sequence_length))
         print("Soft attention beta: {}".format(args.soft_attention_beta))
         print("Sentence loss weight: {}".format(args.sentence_loss_weight))
         print("Token loss weight: {}".format(args.token_loss_weight))
@@ -115,6 +122,7 @@ def train(args):
                 normalise_regularization_losses=args.normalise_regularization_losses,
                 subword_method=args.subword_method,
                 device=device,
+                debug=args.debug,
             )
         else:
             model_config = BertConfig.from_pretrained(args.model, num_labels=1)
@@ -141,6 +149,7 @@ def train(args):
                 normalise_regularization_losses=args.normalise_regularization_losses,
                 subword_method=args.subword_method,
                 device=device,
+                debug=args.debug,
             )
         else:
             model_config = DebertaConfig.from_pretrained(args.model, num_labels=1)
@@ -167,6 +176,7 @@ def train(args):
                 normalise_regularization_losses=args.normalise_regularization_losses,
                 subword_method=args.subword_method,
                 device=device,
+                debug=args.debug,
             )
         else:
             model_config = RobertaConfig.from_pretrained(args.model, num_labels=1)
@@ -176,7 +186,7 @@ def train(args):
                 torch.nn.Sigmoid(),
             )
         tokenizer = RobertaTokenizerFast.from_pretrained(
-            args.tokenizer,  add_prefix_space=True
+            args.tokenizer, add_prefix_space=True
         )
 
     model.to(device)
@@ -323,6 +333,7 @@ def train(args):
                 truncation=True,
                 return_tensors="pt",
                 return_offsets_mapping=True,
+                max_length=args.max_sequence_length,
             )
 
             # Pad token labels
@@ -1091,6 +1102,13 @@ if __name__ == "__main__":
     )
 
     parser.add(
+        "--debug",
+        action="store_true",
+        default=False,
+        help="Enable debug outputs (default: False)",
+    )
+
+    parser.add(
         "--early_stopping_patience",
         action="store",
         type=int,
@@ -1250,6 +1268,14 @@ if __name__ == "__main__":
         type=str,
         default="first",
         help="Method for dealing with subwords (default: first)",
+    )
+
+    parser.add(
+        "--max_sequence_length",
+        action="store",
+        type=int,
+        default=512,
+        help="Maximum sequence length to input to model (default: 512)",
     )
 
     args = parser.parse_args()

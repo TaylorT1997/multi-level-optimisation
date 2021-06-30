@@ -127,7 +127,10 @@ class TokenModel(nn.Module):
                 as_tuple=False
             )
 
-        if individual_subword_indices.nelement() != 0 and self.subword_method != "first":
+        if (
+            individual_subword_indices.nelement() != 0
+            and self.subword_method != "first"
+        ):
             grouped_subword_indices = []
             index_group = None
             for i in range(len(individual_subword_indices)):
@@ -199,7 +202,7 @@ class TokenModel(nn.Module):
 
         if self.debug:
             print(f"token_attention_mask: \n{token_attention_mask}\n")
-          
+
             print(
                 f"masked_token_attention_output shape: \n{masked_token_attention_output.shape}\n"
             )
@@ -208,11 +211,14 @@ class TokenModel(nn.Module):
         # Normalise the attention output
         token_attention_output_normalised = torch.pow(
             masked_token_attention_output, self.soft_attention_beta
-        ) / (torch.sum(
-            torch.pow(masked_token_attention_output, self.soft_attention_beta),
-            dim=1,
-            keepdim=True,
-        )+1e-10)
+        ) / (
+            torch.sum(
+                torch.pow(masked_token_attention_output, self.soft_attention_beta),
+                dim=1,
+                keepdim=True,
+            )
+            + 1e-10
+        )
 
         if self.debug:
             print(
