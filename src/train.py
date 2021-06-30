@@ -124,6 +124,7 @@ def train(args):
                 torch.nn.Sigmoid(),
             )
         tokenizer = BertTokenizerFast.from_pretrained(args.tokenizer)
+        dataset_tokenizer = tokenizer
 
     elif "deberta-base" in args.model:
         if args.mlo_model:
@@ -149,6 +150,8 @@ def train(args):
                 torch.nn.Sigmoid(),
             )
         tokenizer = DebertaTokenizer.from_pretrained(args.tokenizer)
+        dataset_tokenizer = tokenizer
+
     elif "roberta-base" in args.model:
         if args.mlo_model:
             model = TokenModel(
@@ -172,8 +175,8 @@ def train(args):
                 torch.nn.Linear(in_features=768, out_features=1, bias=True),
                 torch.nn.Sigmoid(),
             )
-        tokenizer = RobertaTokenizer.from_pretrained(
-            args.tokenizer, 
+        tokenizer = RobertaTokenizerFast.from_pretrained(
+            args.tokenizer,  add_prefix_space=True
         )
 
     model.to(device)
@@ -549,6 +552,8 @@ def train(args):
                     return_tensors="pt",
                     return_offsets_mapping=True,
                 )
+
+                print(sequences)
 
                 # Pad token labels
                 max_length = 0

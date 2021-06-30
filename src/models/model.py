@@ -25,6 +25,7 @@ class TokenModel(nn.Module):
         sentence_loss_weight=1,
         token_loss_weight=1,
         regularizer_loss_weight=0.01,
+        dropout=0.1,
         token_supervision=True,
         sequence_supervision=True,
         regularization_losses=True,
@@ -48,15 +49,19 @@ class TokenModel(nn.Module):
             print(f"Model {pretrained_model} not in library")
 
         self.token_attention = nn.Sequential(
+            # nn.Dropout(dropout),
             nn.Linear(self.seq2seq_model.config.hidden_size, 100),
             nn.Tanh(),
+            # nn.Dropout(dropout),
             nn.Linear(100, 1),
             nn.Sigmoid(),
         )
 
         self.sentence_classification = nn.Sequential(
+            # nn.Dropout(dropout),
             nn.Linear(self.seq2seq_model.config.hidden_size, 300),
             nn.Tanh(),
+            # nn.Dropout(dropout),
             nn.Linear(300, 1),
             nn.Sigmoid(),
         )
@@ -78,6 +83,7 @@ class TokenModel(nn.Module):
 
         self.device = device
         self.debug = debug
+        self.pretrained_model = pretrained_model
 
         self.step = 0
 
@@ -107,6 +113,19 @@ class TokenModel(nn.Module):
         individual_subword_indices = (offset_mapping[:, :, 0] != 0).nonzero(
             as_tuple=False
         )
+
+        if "bert-base" in self.pretrained_model:
+            individual_subword_indices = (offset_mapping[:, :, 0] != 0).nonzero(
+                as_tuple=False
+            )
+        elif "deberta-base" in self.pretrained_model:
+            individual_subword_indices = (offset_mapping[:, :, 0] != 0).nonzero(
+                as_tuple=False
+            )
+        elif "roberta-base" in self.pretrained_model:
+            individual_subword_indices = (offset_mapping[:, :, 0] > 1).nonzero(
+                as_tuple=False
+            )
 
         if individual_subword_indices.nelement() != 0 and self.subword_method != "first":
             grouped_subword_indices = []
@@ -174,17 +193,13 @@ class TokenModel(nn.Module):
             torch.zeros_like(labels),
         )
 
-        not_subword = offset_mapping[:, :, 0] == 0
-        subword_attention_mask = torch.where(
-            not_subword, torch.ones_like(not_subword), torch.zeros_like(not_subword)
-        )
-        token_attention_mask = torch.mul(token_attention_mask, subword_attention_mask)
-
         masked_token_attention_output = torch.mul(
             word_attention_output, token_attention_mask
         )
 
         if self.debug:
+            print(f"token_attention_mask: \n{token_attention_mask}\n")
+          
             print(
                 f"masked_token_attention_output shape: \n{masked_token_attention_output.shape}\n"
             )
@@ -193,11 +208,11 @@ class TokenModel(nn.Module):
         # Normalise the attention output
         token_attention_output_normalised = torch.pow(
             masked_token_attention_output, self.soft_attention_beta
-        ) / torch.sum(
+        ) / (torch.sum(
             torch.pow(masked_token_attention_output, self.soft_attention_beta),
             dim=1,
             keepdim=True,
-        )
+        )+1e-10)
 
         if self.debug:
             print(
@@ -220,38 +235,6 @@ class TokenModel(nn.Module):
             print(
                 f"pretrained_output_with_attention : \n{pretrained_output_with_attention}\n"
             )
-
-        # token_attention_output_normalised_expanded = token_attention_output_normalised.unsqueeze(
-        #     2
-        # ).expand(
-        #     -1, -1, 768
-        # )
-
-        # if self.debug:
-        #     print(
-        #         f"token_attention_output_normalised_expanded shape: \n{token_attention_output_normalised_expanded.shape}\n"
-        #     )
-        #     print(
-        #         f"token_attention_output_normalised_expanded: \n{token_attention_output_normalised_expanded}\n"
-        #     )
-
-        # pretrained_output_with_attention = torch.einsum(
-        #     "bij, bij -> bij",
-        #     pretrained_output.last_hidden_state,
-        #     token_attention_output_normalised_expanded,
-        # )
-
-        # pretrained_output_with_attention_summed = torch.sum(
-        #     pretrained_output_with_attention, dim=1
-        # )
-
-        # if self.debug:
-        #     print(
-        #         f"pretrained_output_with_attention_summed shape: \n{pretrained_output_with_attention_summed.shape}\n"
-        #     )
-        #     print(
-        #         f"pretrained_output_with_attention_summed : \n{pretrained_output_with_attention_summed}\n"
-        #     )
 
         # Pass pretrained output with attention through sentence classifiaction layer
         sentence_classification_output = self.sentence_classification(
