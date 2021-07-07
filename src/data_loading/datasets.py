@@ -17,10 +17,11 @@ class BinaryTokenTSVDataset(Dataset):
         tokenizer,
         root_dir="/home/tom/Projects/multi-level-optimisation/",
         mode="train",
-        token_label_mode="all",
+        token_label_mode="first",
         conll_10_type="cue",
         wi_locness_type="A",
         include_special_tokens=False,
+        max_sequence_length=512,
     ):
         datasets = ["fce", "conll_10", "toxic", "wi_locness"]
 
@@ -28,9 +29,10 @@ class BinaryTokenTSVDataset(Dataset):
         self.mode = mode
         self.token_label_mode = token_label_mode
         self.include_special_tokens = include_special_tokens
+        self.max_sequence_length = max_sequence_length
 
         if dataset_name == "conll_10":
-            data_dir = os.path.join(root_dir, "data", "processed", "conll_10")
+            data_dir = os.path.join(root_dir, "data", "external", "conll_10")
             tsv_file = os.path.join(
                 data_dir, "conll_10_{}_{}.tsv".format(conll_10_type, mode)
             )
@@ -99,13 +101,12 @@ class BinaryTokenTSVDataset(Dataset):
                     word_labels.append(label)
 
                 else:
-                    if words:
-                        sentence_label = max(word_labels)
+                    if words:                        
                         tokenized_words, tokenized_word_labels = self._tokenize_input(
                             words, word_labels, self.token_label_mode
                         )
-
-                        # samples.append(tokenized_words)
+                        
+                        sentence_label = max(tokenized_word_labels)
                         samples.append(words)
                         sentence_labels.append(sentence_label)
                         token_labels.append(tokenized_word_labels)
@@ -137,6 +138,8 @@ class BinaryTokenTSVDataset(Dataset):
                         encoded_labels.append(-2)
 
         encoded_output = [word for sublist in encoded_tokens for word in sublist]
+
+        encoded_labels = encoded_labels[:(self.max_sequence_length-2)]
 
         if self.include_special_tokens:
             encoded_labels.insert(0, encoded_labels)

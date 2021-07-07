@@ -9,7 +9,7 @@ import math
 import torch
 from torch._C import device
 import torch.optim as optim
-from torch.utils.data import DataLoader, Dataset, random_split
+from torch.utils.data import DataLoader, Dataset, random_split, Subset
 from transformers import (
     BertForSequenceClassification,
     BertTokenizerFast,
@@ -44,7 +44,7 @@ def collate_fn(batch):
 
 
 def train(args):
-    torch.manual_seed(666)
+    torch.manual_seed(args.seed)
 
     if not args.silent:
         if args.debug:
@@ -132,7 +132,6 @@ def train(args):
                 torch.nn.Sigmoid(),
             )
         tokenizer = BertTokenizerFast.from_pretrained(args.tokenizer)
-        dataset_tokenizer = tokenizer
 
     elif "deberta-base" in args.model:
         if args.mlo_model:
@@ -159,7 +158,6 @@ def train(args):
                 torch.nn.Sigmoid(),
             )
         tokenizer = DebertaTokenizer.from_pretrained(args.tokenizer)
-        dataset_tokenizer = tokenizer
 
     elif "roberta-base" in args.model:
         if args.mlo_model:
@@ -181,10 +179,15 @@ def train(args):
         else:
             model_config = RobertaConfig.from_pretrained(args.model, num_labels=1)
             model = RobertaForSequenceClassification(model_config)
-            model.classifier = torch.nn.Sequential(
-                torch.nn.Linear(in_features=768, out_features=1, bias=True),
-                torch.nn.Sigmoid(),
-            )
+            
+            # model.classifier = torch.nn.Sequential(
+            #     torch.nn.Linear(in_features=768, out_features=768, bias=True),
+            #     torch.nn.Linear(in_features=768, out_features=1, bias=True),
+            #     torch.nn.Sigmoid(),
+            # )
+          
+
+
         tokenizer = RobertaTokenizerFast.from_pretrained(
             args.tokenizer, add_prefix_space=True
         )
@@ -198,20 +201,18 @@ def train(args):
         root_dir=args.root,
         mode="train",
         token_label_mode="first",
+        wi_locness_type="ABC",
         include_special_tokens=False,
+        max_sequence_length = args.max_sequence_length
     )
 
     if "wi_locness" in args.dataset:
-        data_split_generator = torch.Generator()
-        data_split_generator.manual_seed(666)
-        dataset_len = len(train_dataset)
-        num_train_samples = math.ceil(dataset_len * 0.8)
-        num_val_samples = math.floor(dataset_len * 0.2)
-        train_dataset, val_dataset = torch.utils.data.random_split(
-            train_dataset,
-            [num_train_samples, num_val_samples],
-            generator=data_split_generator,
-        )
+        dev_indices_file = open("../wi_locness_dev_indices_ABC.txt")
+        dev_indices = [int(i) for i in dev_indices_file.read().split(',')]
+        all_indices = range(len(train_dataset))
+        train_indices = list(set(all_indices) - set(dev_indices))
+        val_dataset = Subset(train_dataset, dev_indices)
+        train_dataset = Subset(train_dataset, train_indices)
 
     else:
         val_dataset = BinaryTokenTSVDataset(
@@ -221,6 +222,7 @@ def train(args):
             mode="dev",
             token_label_mode="first",
             include_special_tokens=False,
+            max_sequence_length = args.max_sequence_length
         )
 
     print()
@@ -333,7 +335,7 @@ def train(args):
                 truncation=True,
                 return_tensors="pt",
                 return_offsets_mapping=True,
-                max_length=args.max_sequence_length,
+                max_length=args.max_sequence_length
             )
 
             # Pad token labels
@@ -374,8 +376,7 @@ def train(args):
                 outputs = model(
                     input_ids,
                     attention_mask=attention_masks,
-                    offset_mapping=offset_mapping,
-                    labels=labels,
+                    labels=labels.unsqueeze(1),
                 )
                 loss = outputs.loss
                 seq_logits = outputs.logits
@@ -458,22 +459,22 @@ def train(args):
         # Calculate training metrics
         seq_train_accuracy = (train_seq_true_positives + train_seq_true_negatives) / (
             train_seq_true_positives
-            + train_seq_true_negatives
+            + train_seq_false_positives
             + train_seq_true_negatives
             + train_seq_false_negatives
-            + 1e-5
+            + 1e-99
         )
         seq_train_precision = train_seq_true_positives / (
-            train_seq_true_positives + train_seq_false_positives + 1e-5
+            train_seq_true_positives + train_seq_false_positives + 1e-99
         )
         seq_train_recall = train_seq_true_positives / (
-            train_seq_true_positives + train_seq_false_negatives + 1e-5
+            train_seq_true_positives + train_seq_false_negatives + 1e-99
         )
         seq_train_f1 = (2 * seq_train_precision * seq_train_recall) / (
-            seq_train_precision + seq_train_recall + 1e-5
+            seq_train_precision + seq_train_recall + 1e-99
         )
         seq_train_f05 = (1.25 * seq_train_precision * seq_train_recall) / (
-            0.25 * seq_train_precision + seq_train_recall + 1e-5
+            0.25 * seq_train_precision + seq_train_recall + 1e-99
         )
 
         token_train_accuracy = (
@@ -483,22 +484,22 @@ def train(args):
             + train_token_false_positives
             + train_token_true_negatives
             + train_token_false_negatives
-            + 1e-5
+            + 1e-99
         )
         token_train_precision = train_token_true_positives / (
-            train_token_true_positives + train_token_false_positives + 1e-5
+            train_token_true_positives + train_token_false_positives + 1e-99
         )
         token_train_recall = train_token_true_positives / (
-            train_token_true_positives + train_token_false_negatives + 1e-5
+            train_token_true_positives + train_token_false_negatives + 1e-99
         )
         token_train_f1 = (2 * token_train_precision * token_train_recall) / (
-            token_train_precision + token_train_recall + 1e-5
+            token_train_precision + token_train_recall + 1e-99
         )
         token_train_f05 = (1.25 * token_train_precision * token_train_recall) / (
-            0.25 * token_train_precision + token_train_recall + 1e-5
+            0.25 * token_train_precision + token_train_recall + 1e-99
         )
 
-        train_av_loss = train_total_loss / (train_batches + 1e-5)
+        train_av_loss = train_total_loss / (train_batches + 1e-99)
 
         if args.use_wandb:
             wandb.log(
@@ -562,7 +563,7 @@ def train(args):
                     truncation=True,
                     return_tensors="pt",
                     return_offsets_mapping=True,
-                    max_length=args.max_sequence_length,
+                    max_length=args.max_sequence_length
                 )
 
                 # Pad token labels
@@ -603,7 +604,7 @@ def train(args):
                 # Otherwise pass inputs and sequence labels through basic pretrained model
                 else:
                     outputs = model(
-                        input_ids, attention_mask=attention_masks, labels=labels
+                        input_ids, attention_mask=attention_masks, labels=labels.unsqueeze(1)
                     )
                     loss = outputs.loss
                     seq_logits = outputs.logits
@@ -746,18 +747,19 @@ def train(args):
             + val_seq_false_positives
             + val_seq_true_negatives
             + val_seq_false_negatives
+            + 1e-99
         )
         seq_val_precision = val_seq_true_positives / (
-            val_seq_true_positives + val_seq_false_positives + 1e-5
+            val_seq_true_positives + val_seq_false_positives + 1e-99
         )
         seq_val_recall = val_seq_true_positives / (
-            val_seq_true_positives + val_seq_false_negatives + 1e-5
+            val_seq_true_positives + val_seq_false_negatives + 1e-99
         )
         seq_val_f1 = (2 * seq_val_precision * seq_val_recall) / (
-            seq_val_precision + seq_val_recall + 1e-5
+            seq_val_precision + seq_val_recall + 1e-99
         )
         seq_val_f05 = (1.25 * seq_val_precision * seq_val_recall) / (
-            0.25 * seq_val_precision + seq_val_recall + 1e-5
+            0.25 * seq_val_precision + seq_val_recall + 1e-99
         )
 
         token_val_accuracy = (val_token_true_positives + val_token_true_negatives) / (
@@ -765,19 +767,19 @@ def train(args):
             + val_token_false_positives
             + val_token_true_negatives
             + val_token_false_negatives
-            + 1e-5
+            + 1e-99
         )
         token_val_precision = val_token_true_positives / (
-            val_token_true_positives + val_token_false_positives + 1e-5
+            val_token_true_positives + val_token_false_positives + 1e-99
         )
         token_val_recall = val_token_true_positives / (
-            val_token_true_positives + val_token_false_negatives + 1e-5
+            val_token_true_positives + val_token_false_negatives + 1e-99
         )
         token_val_f1 = (2 * token_val_precision * token_val_recall) / (
-            token_val_precision + token_val_recall + 1e-5
+            token_val_precision + token_val_recall + 1e-99
         )
         token_val_f05 = (1.25 * token_val_precision * token_val_recall) / (
-            0.25 * token_val_precision + token_val_recall + 1e-5
+            0.25 * token_val_precision + token_val_recall + 1e-99
         )
 
         val_av_loss = val_total_loss / val_batches
@@ -836,7 +838,7 @@ def train(args):
                 print("Validation token f0.5: {:.4f}".format(token_val_f05))
                 print()
 
-            print("Learning rate value: {}".format(scheduler.get_lr()))
+            print("Learning rate value: {}".format(scheduler.get_last_lr()[0]))
             print("Epoch time: {:.0f}".format(epoch_time))
 
         if args.early_stopping_objective == "loss":
@@ -1081,7 +1083,7 @@ if __name__ == "__main__":
         "--learning_rate",
         action="store",
         type=float,
-        default=1e-5,
+        default=1e-99,
         help="Learning rate (default: 0.0001)",
     )
 
@@ -1276,6 +1278,14 @@ if __name__ == "__main__":
         type=int,
         default=512,
         help="Maximum sequence length to input to model (default: 512)",
+    )
+
+    parser.add(
+        "--seed",
+        action="store",
+        type=int,
+        default=666,
+        help="Random seed for model",
     )
 
     args = parser.parse_args()

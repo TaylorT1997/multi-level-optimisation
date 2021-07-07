@@ -42,14 +42,18 @@ def test(args):
     torch.manual_seed(666)
 
     if not args.silent:
-        print("*" * 30)
-        print("Testing model: {}".format(args.model_path.split("/")[-2]))
-        print("*" * 30)
+        print("*" * 43)
+        print("Testing model: {}".format(args.model_path))
+        print("*" * 43)
         print()
         print("Model: {}".format(args.model))
         print("Tokenizer: {}".format(args.tokenizer))
         print("Dataset: {}".format(args.dataset))
         print("Batch size: {}".format(args.batch_size))
+        print()
+        print("Maximum sequence length: {}".format(args.max_sequence_length))
+        print("Soft attention beta: {}".format(args.soft_attention_beta))
+        print("Subword method: {}".format(args.subword_method))
 
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
@@ -65,10 +69,6 @@ def test(args):
         else:
             model_config = BertConfig.from_pretrained(args.model, num_labels=1)
             model = BertForSequenceClassification(model_config)
-            model.classifier = torch.nn.Sequential(
-                torch.nn.Linear(in_features=768, out_features=1, bias=True),
-                torch.nn.Sigmoid(),
-            )
         tokenizer = BertTokenizerFast.from_pretrained(args.tokenizer)
 
     elif "deberta-base" in args.model:
@@ -82,10 +82,6 @@ def test(args):
         else:
             model_config = DebertaConfig.from_pretrained(args.model, num_labels=1)
             model = DebertaForSequenceClassification(model_config)
-            model.classifier = torch.nn.Sequential(
-                torch.nn.Linear(in_features=768, out_features=1, bias=True),
-                torch.nn.Sigmoid(),
-            )
         tokenizer = DebertaTokenizer.from_pretrained(args.tokenizer)
     elif "roberta-base" in args.model:
         if args.mlo_model:
@@ -98,16 +94,12 @@ def test(args):
         else:
             model_config = RobertaConfig.from_pretrained(args.model, num_labels=1)
             model = RobertaForSequenceClassification(model_config)
-            model.classifier = torch.nn.Sequential(
-                torch.nn.Linear(in_features=768, out_features=1, bias=True),
-                torch.nn.Sigmoid(),
-            )
         tokenizer = RobertaTokenizerFast.from_pretrained(
             args.tokenizer, add_prefix_space=True
         )
 
     # Load model from path and put on device
-    model.load_state_dict(torch.load(args.model_path))
+    model.load_state_dict(torch.load(os.path.join(args.root, "models", args.model_path, "model.pt")))
     model.to(device)
 
     # Define test dataset
@@ -116,8 +108,11 @@ def test(args):
             dataset_name=args.dataset,
             tokenizer=tokenizer,
             root_dir=args.root,
+            token_label_mode="first",
             mode="dev",
+            wi_locness_type="ABCN",
             include_special_tokens=False,
+            max_sequence_length=args.max_sequence_length
         )
 
     else:
@@ -125,8 +120,10 @@ def test(args):
             dataset_name=args.dataset,
             tokenizer=tokenizer,
             root_dir=args.root,
+            token_label_mode="first",
             mode="test",
             include_special_tokens=False,
+            max_sequence_length=args.max_sequence_length
         )
 
     print()
@@ -179,6 +176,7 @@ def test(args):
                 truncation=True,
                 return_tensors="pt",
                 return_offsets_mapping=True,
+                max_length=args.max_sequence_length
             )
 
             # Pad token labels
@@ -217,13 +215,10 @@ def test(args):
             # Otherwise pass inputs and sequence labels through basic pretrained model
             else:
                 outputs = model(
-                    input_ids, attention_mask=attention_masks, labels=labels
+                    input_ids, attention_mask=attention_masks, labels=labels.unsqueeze(1)
                 )
                 loss = outputs.loss
                 seq_logits = outputs.logits
-
-            # print(seq_logits)
-            # print(labels)
 
             # Calculate token prediction metrics
             if args.mlo_model:
@@ -318,21 +313,21 @@ def test(args):
     seq_test_accuracy = (test_seq_true_positives + test_seq_true_negatives) / (
         test_seq_true_positives
         + test_seq_true_negatives
-        + test_seq_true_negatives
+        + test_seq_false_positives
         + test_seq_false_negatives
-        + 1e-5
+        + 1e-99
     )
     seq_test_precision = test_seq_true_positives / (
-        test_seq_true_positives + test_seq_false_positives + 1e-5
+        test_seq_true_positives + test_seq_false_positives + 1e-99
     )
     seq_test_recall = test_seq_true_positives / (
-        test_seq_true_positives + test_seq_false_negatives + 1e-5
+        test_seq_true_positives + test_seq_false_negatives + 1e-99
     )
     seq_test_f1 = (2 * seq_test_precision * seq_test_recall) / (
-        seq_test_precision + seq_test_recall + 1e-5
+        seq_test_precision + seq_test_recall + 1e-99
     )
     seq_test_f05 = (1.25 * seq_test_precision * seq_test_recall) / (
-        0.25 * seq_test_precision + seq_test_recall + 1e-5
+        0.25 * seq_test_precision + seq_test_recall + 1e-99
     )
 
     token_test_accuracy = (test_token_true_positives + test_token_true_negatives) / (
@@ -340,19 +335,19 @@ def test(args):
         + test_token_false_positives
         + test_token_true_negatives
         + test_token_false_negatives
-        + 1e-5
+        + 1e-99
     )
     token_test_precision = test_token_true_positives / (
-        test_token_true_positives + test_token_false_positives + 1e-5
+        test_token_true_positives + test_token_false_positives + 1e-99
     )
     token_test_recall = test_token_true_positives / (
-        test_token_true_positives + test_token_false_negatives + 1e-5
+        test_token_true_positives + test_token_false_negatives + 1e-99
     )
     token_test_f1 = (2 * token_test_precision * token_test_recall) / (
-        token_test_precision + token_test_recall + 1e-5
+        token_test_precision + token_test_recall + 1e-99
     )
     token_test_f05 = (1.25 * token_test_precision * token_test_recall) / (
-        0.25 * token_test_precision + token_test_recall + 1e-5
+        0.25 * token_test_precision + token_test_recall + 1e-99
     )
 
     if args.use_wandb:
@@ -490,6 +485,14 @@ if __name__ == "__main__":
         action="store_true",
         default=False,
         help="Silence console prints (default: False)",
+    )
+
+    parser.add(
+        "--max_sequence_length",
+        action="store",
+        type=int,
+        default=512,
+        help="Maximum sequence length to input to model (default: 512)",
     )
 
     args = parser.parse_args()

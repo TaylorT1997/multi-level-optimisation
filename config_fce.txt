@@ -2,41 +2,45 @@
 
 root = "/home/taylort/Projects/multi-level-optimisation/"
 
-model = "bert-base-cased"
-tokenizer = "bert-base-cased"
-mlo_model = true
+model = "roberta-base"
+tokenizer = "roberta-base"
+
+mlo_model = false
 
 dataset = "fce"
 
-epochs = 20
+epochs = 30
 batch_size = 16
 learning_rate = 2e-5
-early_stopping_patience = 7
-early_stopping_objective = "loss"
+early_stopping_patience = 10
+early_stopping_objective = "seq_f1"
 
-lr_optimizer = adam
+lr_optimizer = adamw
 lr_momentum = 0.9
-lr_weight_decay = 0.02
+lr_weight_decay = 0.01
 lr_epsilon = 1e-7
 
 lr_scheduler = warmup_linear
-lr_scheduler_warmup_ratio = 0.2
+
+lr_scheduler_warmup_ratio = 0.3
 
 lr_scheduler_step = 5
 lr_scheduler_gamma = 0.1
 
-max_sequence_length = 126
-soft_attention_beta = 1
+max_sequence_length = 512
+soft_attention_beta = 2
 sentence_loss_weight = 1
 token_loss_weight = 1
 regularizer_loss_weight = 0.5
 normalise_supervised_losses = true
 normalise_regularization_losses = true
-subword_method = "max"
+subword_method = "mean"
 
-token_supervision = true
 sequence_supervision = true
+token_supervision = true
 regularization_losses = true
 
 save_model = true
 use_wandb = true
+
+seed = 666

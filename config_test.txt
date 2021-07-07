@@ -2,16 +2,17 @@
 
 root = "/home/taylort/Projects/multi-level-optimisation/"
 
-model = "bert-base-cased"
-tokenizer = "bert-base-cased"
+model = "roberta-base"
+tokenizer = "roberta-base"
 mlo_model = true
 
-dataset = "fce"
+dataset = "conll_10"
 batch_size = 64
 
-model_path = "/home/taylort/Projects/multi-level-optimisation/models/fce_2021_06_23_12_29_50/model.pt"
+model_path = "conll_10_2021_07_06_17_51_14"
 
-soft_attention_beta = 1
+max_sequence_length = 512
+soft_attention_beta = 2
 subword_method = "max"
 
 use_wandb = false
