@@ -1,6 +1,6 @@
 # Config settings for train.py
 
-root = "/home/taylort/Projects/multi-level-optimisation/"
+root = "/home/tom/Projects/multi-level-optimisation/"
 
 model = "roberta-base"
 tokenizer = "roberta-base"

@@ -98,8 +98,13 @@ class MultiAttentionHeadModel(nn.Module):
         # ).squeeze(2)
 
         # Access multi-headed attention layer for attention values
+        # (batch_size, num_heads, sequence_length, sequence_length)
         pretrained_output.attentions
-        print(pretrained_output.attentions)
+        print(pretrained_output.attentions[-1])
+        print(pretrained_output.attentions[-1].shape)
+        print(len(pretrained_output.attentions))
+
+        last_pretrained_layer = pretrained_output.attentions[-1]
 
         sys.exit()
 
