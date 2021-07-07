@@ -179,14 +179,12 @@ def train(args):
         else:
             model_config = RobertaConfig.from_pretrained(args.model, num_labels=1)
             model = RobertaForSequenceClassification(model_config)
-            
+
             # model.classifier = torch.nn.Sequential(
             #     torch.nn.Linear(in_features=768, out_features=768, bias=True),
             #     torch.nn.Linear(in_features=768, out_features=1, bias=True),
             #     torch.nn.Sigmoid(),
             # )
-          
-
 
         tokenizer = RobertaTokenizerFast.from_pretrained(
             args.tokenizer, add_prefix_space=True
@@ -203,12 +201,12 @@ def train(args):
         token_label_mode="first",
         wi_locness_type="ABC",
         include_special_tokens=False,
-        max_sequence_length = args.max_sequence_length
+        max_sequence_length=args.max_sequence_length,
     )
 
     if "wi_locness" in args.dataset:
         dev_indices_file = open("../wi_locness_dev_indices_ABC.txt")
-        dev_indices = [int(i) for i in dev_indices_file.read().split(',')]
+        dev_indices = [int(i) for i in dev_indices_file.read().split(",")]
         all_indices = range(len(train_dataset))
         train_indices = list(set(all_indices) - set(dev_indices))
         val_dataset = Subset(train_dataset, dev_indices)
@@ -222,7 +220,7 @@ def train(args):
             mode="dev",
             token_label_mode="first",
             include_special_tokens=False,
-            max_sequence_length = args.max_sequence_length
+            max_sequence_length=args.max_sequence_length,
         )
 
     print()
@@ -335,7 +333,7 @@ def train(args):
                 truncation=True,
                 return_tensors="pt",
                 return_offsets_mapping=True,
-                max_length=args.max_sequence_length
+                max_length=args.max_sequence_length,
             )
 
             # Pad token labels
@@ -563,7 +561,7 @@ def train(args):
                     truncation=True,
                     return_tensors="pt",
                     return_offsets_mapping=True,
-                    max_length=args.max_sequence_length
+                    max_length=args.max_sequence_length,
                 )
 
                 # Pad token labels
@@ -604,7 +602,9 @@ def train(args):
                 # Otherwise pass inputs and sequence labels through basic pretrained model
                 else:
                     outputs = model(
-                        input_ids, attention_mask=attention_masks, labels=labels.unsqueeze(1)
+                        input_ids,
+                        attention_mask=attention_masks,
+                        labels=labels.unsqueeze(1),
                     )
                     loss = outputs.loss
                     seq_logits = outputs.logits
@@ -1281,11 +1281,7 @@ if __name__ == "__main__":
     )
 
     parser.add(
-        "--seed",
-        action="store",
-        type=int,
-        default=666,
-        help="Random seed for model",
+        "--seed", action="store", type=int, default=666, help="Random seed for model",
     )
 
     args = parser.parse_args()
