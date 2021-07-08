@@ -125,7 +125,7 @@ def train(args):
                 debug=args.debug,
             )
         else:
-            model_config = BertConfig.from_pretrained(args.model, num_labels=1)
+            model_config = BertConfig.from_pretrained(args.model, num_labels=2)
             model = BertForSequenceClassification(model_config)
             model.classifier = torch.nn.Sequential(
                 torch.nn.Linear(in_features=768, out_features=1, bias=True),
@@ -151,7 +151,7 @@ def train(args):
                 debug=args.debug,
             )
         else:
-            model_config = DebertaConfig.from_pretrained(args.model, num_labels=1)
+            model_config = DebertaConfig.from_pretrained(args.model, num_labels=2)
             model = DebertaForSequenceClassification(model_config)
             model.classifier = torch.nn.Sequential(
                 torch.nn.Linear(in_features=768, out_features=1, bias=True),
@@ -177,14 +177,8 @@ def train(args):
                 debug=args.debug,
             )
         else:
-            model_config = RobertaConfig.from_pretrained(args.model, num_labels=1)
+            model_config = RobertaConfig.from_pretrained(args.model, num_labels=2)
             model = RobertaForSequenceClassification(model_config)
-
-            # model.classifier = torch.nn.Sequential(
-            #     torch.nn.Linear(in_features=768, out_features=768, bias=True),
-            #     torch.nn.Linear(in_features=768, out_features=1, bias=True),
-            #     torch.nn.Sigmoid(),
-            # )
 
         tokenizer = RobertaTokenizerFast.from_pretrained(
             args.tokenizer, add_prefix_space=True
@@ -372,12 +366,10 @@ def train(args):
             # Otherwise pass inputs and sequence labels through basic pretrained model
             else:
                 outputs = model(
-                    input_ids,
-                    attention_mask=attention_masks,
-                    labels=labels.unsqueeze(1),
+                    input_ids, attention_mask=attention_masks, labels=labels.long(),
                 )
                 loss = outputs.loss
-                seq_logits = outputs.logits
+                seq_logits = torch.argmax(outputs.logits, dim=1)
 
             # Backpropagate losses and update weights
             loss.backward()
@@ -409,7 +401,7 @@ def train(args):
                 train_token_false_negatives += token_false_negatives
 
             # Calculate sequence prediction metrics
-            seq_preds = seq_logits.view(-1) > 0.5
+            seq_preds = (seq_logits.view(-1) > 0.5).long()
             seq_actuals = labels
 
             seq_true_positives = torch.sum(
@@ -632,7 +624,7 @@ def train(args):
                     val_token_false_negatives += token_false_negatives
 
                 # Calculate sequence prediction metrics
-                seq_preds = seq_logits.view(-1) > 0.5
+                seq_preds = (seq_logits.view(-1) > 0.5).long()
                 seq_actuals = labels
 
                 seq_true_positives = torch.sum(

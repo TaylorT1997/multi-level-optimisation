@@ -274,6 +274,8 @@ class TokenModel(nn.Module):
             "sequence_logits": sentence_classification_output,
         }
 
+        sys.exit()
+
         return output
 
     def _calculate_loss(
@@ -296,11 +298,11 @@ class TokenModel(nn.Module):
             print(f"sentence_labels shape: \n{sentence_labels.shape}\n")
 
         # Calculate the sentence MSE loss
-        mse_loss = nn.MSELoss(reduction="sum")
+        mse_loss = nn.MSELoss(reduction="mean")
         sentence_loss = mse_loss(sentence_classification_output, sentence_labels)
 
         # Calculate the token MSE loss depending on the subword method
-        mse_loss = nn.MSELoss(reduction="sum")
+        mse_loss = nn.MSELoss(reduction="mean")
         zero_labels = torch.where(labels == 1, labels, torch.zeros_like(labels))
         token_loss = mse_loss(token_attention_output, zero_labels)
 

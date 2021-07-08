@@ -2,14 +2,14 @@
 
 root = "/home/tom/Projects/multi-level-optimisation/"
 
-model = "roberta-base"
-tokenizer = "roberta-base"
+model = "bert-base-cased"
+tokenizer = "bert-base-cased"
 mlo_model = true
 
-dataset = "conll_10"
-batch_size = 64
+dataset = "wi_locness"
+batch_size = 32
 
-model_path = "conll_10_2021_07_06_17_51_14"
+model_path = "wi_locness_2021_07_07_12_36_44"
 
 max_sequence_length = 512
 soft_attention_beta = 2

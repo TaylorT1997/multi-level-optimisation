@@ -5,6 +5,9 @@ import datetime
 import os
 import configargparse
 import math
+import numpy as np
+
+from sklearn.metrics import f1_score, precision_score, recall_score, accuracy_score
 
 import torch
 import torch.optim as optim
@@ -99,7 +102,9 @@ def test(args):
         )
 
     # Load model from path and put on device
-    model.load_state_dict(torch.load(os.path.join(args.root, "models", args.model_path, "model.pt")))
+    model.load_state_dict(
+        torch.load(os.path.join(args.root, "models", args.model_path, "model.pt"))
+    )
     model.to(device)
 
     # Define test dataset
@@ -112,7 +117,7 @@ def test(args):
             mode="dev",
             wi_locness_type="ABCN",
             include_special_tokens=False,
-            max_sequence_length=args.max_sequence_length
+            max_sequence_length=args.max_sequence_length,
         )
 
     else:
@@ -123,7 +128,7 @@ def test(args):
             token_label_mode="first",
             mode="test",
             include_special_tokens=False,
-            max_sequence_length=args.max_sequence_length
+            max_sequence_length=args.max_sequence_length,
         )
 
     print()
@@ -146,6 +151,9 @@ def test(args):
     test_token_false_positives = 0
     test_token_true_negatives = 0
     test_token_false_negatives = 0
+
+    preds = torch.tensor([], device=device)
+    actuals = torch.tensor([], device=device)
 
     # Log with wandb
     if args.use_wandb:
@@ -176,7 +184,7 @@ def test(args):
                 truncation=True,
                 return_tensors="pt",
                 return_offsets_mapping=True,
-                max_length=args.max_sequence_length
+                max_length=args.max_sequence_length,
             )
 
             # Pad token labels
@@ -196,6 +204,8 @@ def test(args):
             labels = torch.tensor(labels, dtype=torch.float, device=device)
             token_labels = torch.tensor(token_labels, dtype=torch.float, device=device)
 
+            num_labels = len(labels)
+
             # If using mlo model pass inputs and token labels through mlo model
             if args.mlo_model:
                 outputs = model(
@@ -209,20 +219,25 @@ def test(args):
                 token_loss = outputs["token_loss"]
                 regularizer_loss_a = outputs["regularizer_loss_a"]
                 regularizer_loss_b = outputs["regularizer_loss_b"]
-                seq_logits = outputs["sequence_logits"]
-                token_logits = outputs["token_logits"]
+                seq_logits = outputs["sequence_logits"][:num_labels]
+                token_logits = outputs["token_logits"][:num_labels]
+
+                # print(labels.shape)
+                # print(seq_logits.shape)
 
             # Otherwise pass inputs and sequence labels through basic pretrained model
             else:
                 outputs = model(
-                    input_ids, attention_mask=attention_masks, labels=labels.unsqueeze(1)
+                    input_ids,
+                    attention_mask=attention_masks,
+                    labels=labels.unsqueeze(1),
                 )
                 loss = outputs.loss
-                seq_logits = outputs.logits
+                seq_logits = outputs.logits[:num_labels]
 
             # Calculate token prediction metrics
             if args.mlo_model:
-                token_preds = token_logits > 0.5
+                token_preds = (token_logits > 0.5).long()
 
                 token_true_positives = torch.sum(
                     torch.logical_and(token_preds == 1, token_labels == 1)
@@ -243,8 +258,11 @@ def test(args):
                 test_token_false_negatives += token_false_negatives
 
             # Calculate sequence prediction metrics
-            seq_preds = seq_logits.view(-1) > 0.5
+            seq_preds = (seq_logits.view(-1) > 0.5).long()
             seq_actuals = labels
+
+            preds = torch.cat((preds, seq_preds), 0)
+            actuals = torch.cat((actuals, seq_actuals), 0)
 
             seq_true_positives = torch.sum(
                 torch.logical_and(seq_preds == 1, seq_actuals == 1)
@@ -349,6 +367,11 @@ def test(args):
     token_test_f05 = (1.25 * token_test_precision * token_test_recall) / (
         0.25 * token_test_precision + token_test_recall + 1e-99
     )
+
+    print(actuals)
+    print(preds)
+
+    print(f1_score(actuals.cpu().numpy(), preds.cpu().numpy()))
 
     if args.use_wandb:
         wandb.log(

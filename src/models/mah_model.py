@@ -92,19 +92,13 @@ class MultiAttentionHeadModel(nn.Module):
                 f"pretrained_output_last_hidden_state: \n{pretrained_output.last_hidden_state}\n"
             )
 
-        # Pass pretrained output through attention layer
-        # token_attention_output = self.token_attention(
-        #     pretrained_output.last_hidden_state
-        # ).squeeze(2)
-
-        # Access multi-headed attention layer for attention values
+        # Access last multi-headed attention layer for attention values
         # (batch_size, num_heads, sequence_length, sequence_length)
-        pretrained_output.attentions
-        print(pretrained_output.attentions[-1])
-        print(pretrained_output.attentions[-1].shape)
-        print(len(pretrained_output.attentions))
-
         last_pretrained_layer = pretrained_output.attentions[-1]
+
+        if self.debug:
+            print(f"last_pretrained_layer shape: \n{last_pretrained_layer.shape}\n")
+            print(f"last_pretrained_layer: \n{last_pretrained_layer}\n")
 
         sys.exit()
 

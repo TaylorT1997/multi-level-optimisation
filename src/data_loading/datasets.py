@@ -74,13 +74,6 @@ class BinaryTokenTSVDataset(Dataset):
         sentence_label = self.sentence_label[idx]
         token_labels = self.token_labels[idx]
 
-        # if self.include_special_tokens:
-        #     token_labels.insert(0, sentence_label)
-        #     token_labels.append(sentence_label)
-        # else:
-        #     token_labels.insert(0, -3)
-        #     token_labels.append(-1)
-
         return sequence, sentence_label, token_labels
 
     def _get_samples_labels(self, tsv_file):
@@ -101,16 +94,15 @@ class BinaryTokenTSVDataset(Dataset):
                     word_labels.append(label)
 
                 else:
-                    if words:                        
+                    if words:
                         tokenized_words, tokenized_word_labels = self._tokenize_input(
                             words, word_labels, self.token_label_mode
                         )
-                        
+
                         sentence_label = max(tokenized_word_labels)
                         samples.append(words)
                         sentence_labels.append(sentence_label)
                         token_labels.append(tokenized_word_labels)
-
                     words = []
                     word_labels = []
                     continue
@@ -139,7 +131,7 @@ class BinaryTokenTSVDataset(Dataset):
 
         encoded_output = [word for sublist in encoded_tokens for word in sublist]
 
-        encoded_labels = encoded_labels[:(self.max_sequence_length-2)]
+        encoded_labels = encoded_labels[: (self.max_sequence_length - 2)]
 
         if self.include_special_tokens:
             encoded_labels.insert(0, encoded_labels)
