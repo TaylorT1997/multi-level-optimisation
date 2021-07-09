@@ -95,7 +95,7 @@ def test(args):
                 device=device,
             )
         else:
-            model_config = RobertaConfig.from_pretrained(args.model, num_labels=1)
+            model_config = RobertaConfig.from_pretrained(args.model, num_labels=2)
             model = RobertaForSequenceClassification(model_config)
         tokenizer = RobertaTokenizerFast.from_pretrained(
             args.tokenizer, add_prefix_space=True
@@ -228,12 +228,11 @@ def test(args):
             # Otherwise pass inputs and sequence labels through basic pretrained model
             else:
                 outputs = model(
-                    input_ids,
-                    attention_mask=attention_masks,
-                    labels=labels.unsqueeze(1),
+                    input_ids, attention_mask=attention_masks, labels=labels.long(),
                 )
                 loss = outputs.loss
-                seq_logits = outputs.logits[:num_labels]
+                seq_logits = torch.argmax(outputs.logits, dim=1)
+
 
             # Calculate token prediction metrics
             if args.mlo_model:

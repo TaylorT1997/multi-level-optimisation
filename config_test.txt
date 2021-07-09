@@ -1,15 +1,15 @@
 # Config settings for train.py
 
-root = "/home/tom/Projects/multi-level-optimisation/"
+root = "/home/taylort/Projects/multi-level-optimisation/"
 
-model = "bert-base-cased"
-tokenizer = "bert-base-cased"
-mlo_model = true
+model = "roberta-base"
+tokenizer = "roberta-base"
+mlo_model = false
 
-dataset = "wi_locness"
+dataset = "conll_10"
 batch_size = 32
 
-model_path = "wi_locness_2021_07_07_12_36_44"
+model_path = "conll_10_2021_07_08_16_17_46"
 
 max_sequence_length = 512
 soft_attention_beta = 2

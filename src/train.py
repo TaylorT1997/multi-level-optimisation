@@ -594,12 +594,10 @@ def train(args):
                 # Otherwise pass inputs and sequence labels through basic pretrained model
                 else:
                     outputs = model(
-                        input_ids,
-                        attention_mask=attention_masks,
-                        labels=labels.unsqueeze(1),
+                        input_ids, attention_mask=attention_masks, labels=labels.long(),
                     )
                     loss = outputs.loss
-                    seq_logits = outputs.logits
+                    seq_logits = torch.argmax(outputs.logits, dim=1)
 
                 # Calculate token prediction metrics
                 if args.mlo_model:
