@@ -219,11 +219,8 @@ def test(args):
                 token_loss = outputs["token_loss"]
                 regularizer_loss_a = outputs["regularizer_loss_a"]
                 regularizer_loss_b = outputs["regularizer_loss_b"]
-                seq_logits = outputs["sequence_logits"][:num_labels]
-                token_logits = outputs["token_logits"][:num_labels]
-
-                # print(labels.shape)
-                # print(seq_logits.shape)
+                seq_logits = outputs["sequence_logits"]
+                token_logits = outputs["token_logits"]
 
             # Otherwise pass inputs and sequence labels through basic pretrained model
             else:
@@ -232,7 +229,6 @@ def test(args):
                 )
                 loss = outputs.loss
                 seq_logits = torch.argmax(outputs.logits, dim=1)
-
 
             # Calculate token prediction metrics
             if args.mlo_model:

@@ -274,8 +274,6 @@ class TokenModel(nn.Module):
             "sequence_logits": sentence_classification_output,
         }
 
-        sys.exit()
-
         return output
 
     def _calculate_loss(

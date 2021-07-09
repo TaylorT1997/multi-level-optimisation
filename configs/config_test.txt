@@ -1,0 +1,18 @@
+# Config settings for train.py
+
+root = "/home/tom/Projects/multi-level-optimisation/"
+
+model = "bert-base-cased"
+tokenizer = "bert-base-cased"
+mlo_model = true
+
+dataset = "wi_locness"
+batch_size = 32
+
+model_path = "wi_locness_2021_07_07_12_36_44"
+
+max_sequence_length = 512
+soft_attention_beta = 2
+subword_method = "max"
+
+use_wandb = false
