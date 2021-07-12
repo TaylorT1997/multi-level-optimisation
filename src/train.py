@@ -24,7 +24,7 @@ from transformers import (
     GPT2TokenizerFast,
     RobertaTokenizer,
     get_linear_schedule_with_warmup,
-    get_scheduler
+    get_scheduler,
 )
 
 from data_loading.datasets import BinaryTokenTSVDataset
@@ -86,7 +86,7 @@ def train(args):
         print("Regularizer loss weight: {}".format(args.regularizer_loss_weight))
         print("Token supervision: {}".format(args.token_supervision))
         print("Subword method: {}".format(args.subword_method))
-        print("Use lowercase: {}".format(args.use_lower))
+        print("Use lowercase: {}".format(args.use_lowercase))
         print(
             "Normalise supervised losses: {}".format(args.normalise_supervised_losses)
         )
@@ -127,12 +127,65 @@ def train(args):
                 debug=args.debug,
             )
         else:
-            model_config = BertConfig.from_pretrained(args.model, num_labels=2)
-            model = BertForSequenceClassification(model_config)
-            model.classifier = torch.nn.Sequential(
-                torch.nn.Linear(in_features=768, out_features=1, bias=True),
-                torch.nn.Sigmoid(),
+            # model_config = BertConfig.from_pretrained(args.model, num_labels=2)
+            # model = BertForSequenceClassification(model_config)
+            # model.classifier = torch.nn.Sequential(
+            #     torch.nn.Linear(in_features=768, out_features=1, bias=True),
+            #     torch.nn.Sigmoid(),
+            # )
+            from models.seq_class_model import SeqClassModel
+            from transformers import AutoConfig
+
+            config_dict = {
+                "experiment_name": "final_soft_attention",
+                "dataset": "conll10",
+                "model_name": "roberta-base",
+                "max_seq_length": 128,
+                "per_device_train_batch_size": 16,
+                "per_device_eval_batch_size": 32,
+                "num_train_epochs": 20,
+                "warmup_ratio": 0.1,
+                "learning_rate": 2e-5,
+                "weight_decay": 0.1,
+                "seed": 15,
+                "adam_epsilon": 1e-7,
+                "test_label_dummy": "test",
+                "make_all_labels_equal_max": True,
+                "is_seq_class": True,
+                "lowercase": True,
+                "gradient_accumulation_steps": 1,
+                "save_steps": 500,
+                "logging_steps": 500,
+                "output_dir": "models/{experiment_name}/{model_name}/{dataset_name}/{datetime}/",
+                "do_mask_words": False,
+                "mask_prob": 0.0,
+                "hid_to_attn_dropout": 0.10,
+                "attention_evidence_size": 100,
+                "final_hidden_layer_size": 300,
+                "initializer_name": "glorot",
+                "attention_activation": "soft",
+                "soft_attention": True,
+                "soft_attention_gamma": 0.1,
+                "soft_attention_alpha": 0.1,
+                "square_attention": True,
+                "freeze_bert_layers_up_to": 0,
+                "zero_n": 0,
+                "zero_delta": 0.0,
+            }
+
+            labels = ["O", "C"]
+            idx_pos = min([i for i, val in enumerate(labels) if val == "C"])
+            label_map = {i: label for i, label in enumerate(labels)}
+
+            config = AutoConfig.from_pretrained(
+                config_dict["model_name"],
+                id2label=label_map,
+                label2id={label: i for i, label in enumerate(labels)},
+                output_hidden_states=True,
+                output_attentions=True,
             )
+            model = SeqClassModel(params_dict=config_dict, model_config=config)
+
         tokenizer = BertTokenizerFast.from_pretrained(args.tokenizer)
 
     elif "deberta-base" in args.model:
@@ -265,19 +318,13 @@ def train(args):
         )
     elif args.lr_scheduler == "warmup_linear":
         # max_steps = math.ceil(args.num_train_epochs * num_update_steps_per_epoch)
-        
-        train_steps = (
-            args.epochs
-            * (len(train_dataset) // args.batch_size)
-        )
-        warmup_steps = (
-            args.lr_scheduler_warmup_ratio * train_steps
-        )
-        
+
+        train_steps = args.epochs * (len(train_dataset) // args.batch_size)
+        warmup_steps = args.lr_scheduler_warmup_ratio * train_steps
+
         scheduler = get_linear_schedule_with_warmup(
             optimizer, num_warmup_steps=warmup_steps, num_training_steps=train_steps
         )
-
 
     # Record steps
     train_step = 0
