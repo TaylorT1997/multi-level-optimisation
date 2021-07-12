@@ -9,7 +9,7 @@ mlo_model = false
 
 dataset = "conll_10"
 
-epochs = 30
+epochs = 20
 batch_size = 16
 learning_rate = 2e-5
 early_stopping_patience = 10
@@ -35,6 +35,7 @@ regularizer_loss_weight = 0.5
 normalise_supervised_losses = false
 normalise_regularization_losses = false
 subword_method = "max"
+use_lowercase = false
 
 sequence_supervision = true
 token_supervision = false
@@ -43,4 +44,4 @@ regularization_losses = false
 save_model = true
 use_wandb = true
 
-seed = 666
+seed = 15

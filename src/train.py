@@ -24,6 +24,7 @@ from transformers import (
     GPT2TokenizerFast,
     RobertaTokenizer,
     get_linear_schedule_with_warmup,
+    get_scheduler
 )
 
 from data_loading.datasets import BinaryTokenTSVDataset
@@ -85,6 +86,7 @@ def train(args):
         print("Regularizer loss weight: {}".format(args.regularizer_loss_weight))
         print("Token supervision: {}".format(args.token_supervision))
         print("Subword method: {}".format(args.subword_method))
+        print("Use lowercase: {}".format(args.use_lower))
         print(
             "Normalise supervised losses: {}".format(args.normalise_supervised_losses)
         )
@@ -195,6 +197,7 @@ def train(args):
         token_label_mode="first",
         wi_locness_type="ABC",
         include_special_tokens=False,
+        use_lowercase=args.use_lowercase,
         max_sequence_length=args.max_sequence_length,
     )
 
@@ -214,6 +217,7 @@ def train(args):
             mode="dev",
             token_label_mode="first",
             include_special_tokens=False,
+            use_lowercase=args.use_lowercase,
             max_sequence_length=args.max_sequence_length,
         )
 
@@ -260,19 +264,20 @@ def train(args):
             optimizer, step_size=args.lr_scheduler_step, gamma=args.lr_scheduler_gamma
         )
     elif args.lr_scheduler == "warmup_linear":
-        warmup_steps = (
-            args.lr_scheduler_warmup_ratio
-            * args.epochs
-            * (len(train_dataset) // args.batch_size)
-        )
+        # max_steps = math.ceil(args.num_train_epochs * num_update_steps_per_epoch)
+        
         train_steps = (
-            (1 - args.lr_scheduler_warmup_ratio)
-            * args.epochs
+            args.epochs
             * (len(train_dataset) // args.batch_size)
         )
+        warmup_steps = (
+            args.lr_scheduler_warmup_ratio * train_steps
+        )
+        
         scheduler = get_linear_schedule_with_warmup(
             optimizer, num_warmup_steps=warmup_steps, num_training_steps=train_steps
         )
+
 
     # Record steps
     train_step = 0
@@ -435,6 +440,7 @@ def train(args):
                             "train_losses/token_loss": token_loss.item(),
                             "train_losses/regularizer_loss_a": regularizer_loss_a.item(),
                             "train_losses/regularizer_loss_b": regularizer_loss_b.item(),
+                            "train_losses/lr": scheduler.get_last_lr()[0],
                             "train_step": train_step,
                         }
                     )
@@ -442,6 +448,7 @@ def train(args):
                     wandb.log(
                         {
                             "train_losses/total_loss": loss.item(),
+                            "train_losses/lr": scheduler.get_last_lr()[0],
                             "train_step": train_step,
                         }
                     )
@@ -1268,6 +1275,13 @@ if __name__ == "__main__":
         type=int,
         default=512,
         help="Maximum sequence length to input to model (default: 512)",
+    )
+
+    parser.add(
+        "--use_lowercase",
+        action="store_true",
+        default=False,
+        help="Use lowercase as input (default: False)",
     )
 
     parser.add(

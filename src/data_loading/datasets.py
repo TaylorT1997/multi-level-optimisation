@@ -21,6 +21,7 @@ class BinaryTokenTSVDataset(Dataset):
         conll_10_type="cue",
         wi_locness_type="A",
         include_special_tokens=False,
+        use_lower=False,
         max_sequence_length=512,
     ):
         datasets = ["fce", "conll_10", "toxic", "wi_locness"]
@@ -29,6 +30,7 @@ class BinaryTokenTSVDataset(Dataset):
         self.mode = mode
         self.token_label_mode = token_label_mode
         self.include_special_tokens = include_special_tokens
+        self.use_lower = use_lower
         self.max_sequence_length = max_sequence_length
 
         if dataset_name == "conll_10":
@@ -89,7 +91,10 @@ class BinaryTokenTSVDataset(Dataset):
 
             for row in tsv_reader:
                 if row:
-                    words.append(row[0])
+                    if self.use_lower:
+                        words.append(row[0].lower())
+                    else:
+                        words.append(row[0])
                     label = 1 if row[1] == self.positive_label else 0
                     word_labels.append(label)
 
