@@ -39,16 +39,19 @@ class BinaryTokenTSVDataset(Dataset):
                 data_dir, "conll_10_{}_{}.tsv".format(conll_10_type, mode)
             )
             self.positive_label = "C"
+            self.negative_label = "O"
 
         elif dataset_name == "fce":
             data_dir = os.path.join(root_dir, "data", "processed", "fce_v2.1")
             tsv_file = os.path.join(data_dir, "fce_{}.tsv".format(mode))
             self.positive_label = "i"
+            self.negative_label = "c"
 
         elif dataset_name == "toxic":
             data_dir = os.path.join(root_dir, "data", "processed", "toxic")
             tsv_file = os.path.join(data_dir, "tsd_{}.tsv".format(mode))
             self.positive_label = "t"
+            self.negative_label = "f"
 
         elif dataset_name == "wi_locness":
             data_dir = os.path.join(root_dir, "data", "processed", "wi_locness_v2.1")
@@ -56,6 +59,7 @@ class BinaryTokenTSVDataset(Dataset):
                 data_dir, "wi_locness_{}_{}.tsv".format(wi_locness_type, mode)
             )
             self.positive_label = "i"
+            self.negative_label = "c"
 
         else:
             raise Exception(

@@ -55,9 +55,10 @@ logger = logging.getLogger(__name__)
 
 
 class SoftAttentionSeqClassModel(nn.Module):
-    def __init__(self, config_dict, bert_out_size, num_labels):
+    def __init__(self, config_dict, bert_out_size, num_labels, debug=True):
         super().__init__()
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.debug = debug
 
         self.initializer_name = config_dict["initializer_name"]
         self.square_attention = config_dict.get("square_attention", False)
@@ -307,7 +308,6 @@ class SeqClassModel(PreTrainedModel):
 
         self.post_bert_model = None
         if self.config_dict.get("soft_attention", False):
-            print("test")
             self.post_bert_model = SoftAttentionSeqClassModel(
                 self.config_dict, self.bert.config.hidden_size, model_config.num_labels,
             )
@@ -433,7 +433,6 @@ class BaseBertModel(PreTrainedModel):
 
         self.post_bert_model = None
         if self.config_dict.get("soft_attention", False):
-            print("test")
             self.post_bert_model = SoftAttentionSeqClassModel(
                 self.config_dict, self.bert.config.hidden_size, model_config.num_labels,
             )
