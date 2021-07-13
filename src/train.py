@@ -700,7 +700,7 @@ def train(args):
                     seq_logits = torch.argmax(outputs.logits, dim=1)
 
                 # Calculate token prediction metrics
-                if args.model_architecture == ("joint" or "zero_shot"):
+                if args.model_architecture == "joint" or args.model_architecture == "zero_shot":
                     token_preds = token_logits > 0.5
 
                     token_true_positives = torch.sum(
