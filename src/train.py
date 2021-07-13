@@ -519,7 +519,6 @@ def train(args):
             if args.use_wandb:
                 if (
                     args.model_architecture == "joint"
-                    or args.model_architecture == "zero_shot"
                 ):
                     wandb.log(
                         {
@@ -622,7 +621,6 @@ def train(args):
         if args.use_wandb:
             if (
                 args.model_architecture == "joint"
-                or args.model_architecture == "zero_shot"
             ):
                 table = wandb.Table(
                     columns=[
@@ -752,7 +750,6 @@ def train(args):
                 if args.use_wandb:
                     if (
                         args.model_architecture == "joint"
-                        or args.model_architecture == "zero_shot"
                     ):
                         wandb.log(
                             {
@@ -804,7 +801,6 @@ def train(args):
 
                         if (
                             args.model_architecture == "joint"
-                            or args.model_architecture == "zero_shot"
                         ):
                             true_token_labels = (
                                 token_labels[i][
@@ -931,7 +927,7 @@ def train(args):
             print("Validation sequence f1: {:.4f}".format(seq_val_f1))
             print("Validation sequence f0.5: {:.4f}".format(seq_val_f05))
             print()
-            if args.model_architecture == "joint":
+            if args.model_architecture == "joint" or args.model_architecture == "zero_shot":
                 print("Validation token accuracy: {:.4f}".format(token_val_accuracy))
                 print("Validation token precision: {:.4f}".format(token_val_precision))
                 print("Validation token recall: {:.4f}".format(token_val_recall))

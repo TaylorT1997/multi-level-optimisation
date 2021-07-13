@@ -9,9 +9,9 @@ mlo_model = false
 dataset = "conll_10"
 batch_size = 32
 
-model_path = "conll_10_2021_07_13_08_04_56"
+model_path = "conll_10_2021_07_13_09_15_28"
 
-max_sequence_length = 127
+max_sequence_length = 512
 soft_attention_beta = 2
 subword_method = "max"
 

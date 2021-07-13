@@ -5,7 +5,7 @@ root = "/home/taylort/Projects/multi-level-optimisation/"
 model = "roberta-base"
 tokenizer = "roberta-base"
 
-mlo_model = false
+model_architecture = zero_shot
 
 dataset = "conll_10"
 
