@@ -2,23 +2,22 @@
 
 root = "/home/taylort/Projects/multi-level-optimisation/"
 
-root = "/home/taylort/Projects/multi-level-optimisation/"
 model = "roberta-base"
 tokenizer = "roberta-base"
 
-mlo_model = true
+model_architecture = zero_shot
 
 dataset = "toxic"
 
-epochs = 30
+epochs = 20
 batch_size = 16
 learning_rate = 2e-5
-early_stopping_patience = 7
+early_stopping_patience = 20
 early_stopping_objective = "seq_f1"
 
 lr_optimizer = adamw
 lr_momentum = 0.9
-lr_weight_decay = 0.01
+lr_weight_decay = 0.1
 lr_epsilon = 1e-7
 
 lr_scheduler = warmup_linear
@@ -32,14 +31,17 @@ max_sequence_length = 127
 soft_attention_beta = 2
 sentence_loss_weight = 1
 token_loss_weight = 1
-regularizer_loss_weight = 0.1
-normalise_supervised_losses = true
-normalise_regularization_losses = true
+regularizer_loss_weight = 0.5
+normalise_supervised_losses = false
+normalise_regularization_losses = false
 subword_method = "max"
+use_lowercase = true
 
 sequence_supervision = true
 token_supervision = false
-regularization_losses = true
+regularization_losses = false
 
 save_model = true
 use_wandb = true
+
+seed = 15

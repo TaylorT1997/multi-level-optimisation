@@ -134,6 +134,9 @@ def train(args):
         max_sequence_length=args.max_sequence_length,
     )
 
+    negative_label = train_dataset.negative_label
+    positive_label = train_dataset.positive_label
+
     if "wi_locness" in args.dataset:
         dev_indices_file = open("../wi_locness_dev_indices_ABC.txt")
         dev_indices = [int(i) for i in dev_indices_file.read().split(",")]
@@ -194,9 +197,9 @@ def train(args):
         "initializer_name": "glorot",
         "attention_activation": "soft",
         "soft_attention": True,
-        "soft_attention_alpha": 0.0,
+        "soft_attention_alpha": 0.1,
         "soft_attention_gamma": 0.1,
-        "soft_attention_beta": 0.1,
+        "soft_attention_beta": 0.0,
         "square_attention": True,
         "freeze_bert_layers_up_to": 0,
         "zero_n": 0,
@@ -222,7 +225,7 @@ def train(args):
                 debug=args.debug,
             )
         elif args.model_architecture == "zero_shot":
-            labels = [train_dataset.negative_label, train_dataset.positive_label]
+            labels = [negative_label, positive_label]
             label_map = {i: label for i, label in enumerate(labels)}
 
             config = AutoConfig.from_pretrained(
@@ -261,7 +264,7 @@ def train(args):
                 debug=args.debug,
             )
         elif args.model_architecture == "zero_shot":
-            labels = [train_dataset.negative_label, train_dataset.positive_label]
+            labels = [negative_label, positive_label]
             label_map = {i: label for i, label in enumerate(labels)}
 
             config = AutoConfig.from_pretrained(
@@ -300,7 +303,7 @@ def train(args):
                 debug=args.debug,
             )
         elif args.model_architecture == "zero_shot":
-            labels = [train_dataset.negative_label, train_dataset.positive_label]
+            labels = [negative_label, positive_label]
             label_map = {i: label for i, label in enumerate(labels)}
 
             config = AutoConfig.from_pretrained(
@@ -471,7 +474,7 @@ def train(args):
                 args.model_architecture == "joint"
                 or args.model_architecture == "zero_shot"
             ):
-                token_preds = token_logits > 0.5
+                token_preds = (token_logits > 0.5).long()
                 token_true_positives = torch.sum(
                     torch.logical_and(token_preds == 1, token_labels == 1)
                 ).item()
@@ -701,7 +704,7 @@ def train(args):
 
                 # Calculate token prediction metrics
                 if args.model_architecture == "joint" or args.model_architecture == "zero_shot":
-                    token_preds = token_logits > 0.5
+                    token_preds = (token_logits > 0.5).long()
 
                     token_true_positives = torch.sum(
                         torch.logical_and(token_preds == 1, token_labels == 1)

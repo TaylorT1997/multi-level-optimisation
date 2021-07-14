@@ -24,10 +24,12 @@ from transformers import (
     DebertaForSequenceClassification,
     DebertaConfig,
     GPT2TokenizerFast,
+    AutoConfig
 )
 
 from data_loading.datasets import BinaryTokenTSVDataset
 from models.model import TokenModel
+from models.seq_class_model import SeqClassModel
 
 import wandb
 
@@ -42,7 +44,7 @@ def collate_fn(batch):
 
 
 def test(args):
-    torch.manual_seed(666)
+    torch.manual_seed(args.seed)
 
     if not args.silent:
         print("*" * 43)
@@ -50,6 +52,7 @@ def test(args):
         print("*" * 43)
         print()
         print("Model: {}".format(args.model))
+        print("Model architecture: {}".format(args.model_architecture))
         print("Tokenizer: {}".format(args.tokenizer))
         print("Dataset: {}".format(args.dataset))
         print("Batch size: {}".format(args.batch_size))
@@ -60,105 +63,17 @@ def test(args):
 
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
-    # Define model
+    # Set the tokenizer
     if "bert-base" in args.model:
-        if args.mlo_model:
-            model = TokenModel(
-                pretrained_model=args.model,
-                soft_attention_beta=args.soft_attention_beta,
-                subword_method=args.subword_method,
-                device=device,
-            )
-        else:
-            model_config = BertConfig.from_pretrained(args.model, num_labels=1)
-            model = BertForSequenceClassification(model_config)
         tokenizer = BertTokenizerFast.from_pretrained(args.tokenizer)
-
     elif "deberta-base" in args.model:
-        if args.mlo_model:
-            model = TokenModel(
-                pretrained_model=args.model,
-                soft_attention_beta=args.soft_attention_beta,
-                subword_method=args.subword_method,
-                device=device,
-            )
-        else:
-            model_config = DebertaConfig.from_pretrained(args.model, num_labels=1)
-            model = DebertaForSequenceClassification(model_config)
         tokenizer = DebertaTokenizer.from_pretrained(args.tokenizer)
     elif "roberta-base" in args.model:
-        if args.mlo_model:
-            model = TokenModel(
-                pretrained_model=args.model,
-                soft_attention_beta=args.soft_attention_beta,
-                subword_method=args.subword_method,
-                device=device,
-            )
-        else:
-            # model_config = RobertaConfig.from_pretrained(args.model, num_labels=2)
-            # model = RobertaForSequenceClassification(model_config)
-            from models.seq_class_model import SeqClassModel
-            from transformers import AutoConfig
-
-            config_dict = {
-                "experiment_name": "final_soft_attention",
-                "dataset": "conll10",
-                "model_name": "roberta-base",
-                "max_seq_length": 128,
-                "per_device_train_batch_size": 16,
-                "per_device_eval_batch_size": 32,
-                "num_train_epochs": 20,
-                "warmup_ratio": 0.1,
-                "learning_rate": 2e-5,
-                "weight_decay": 0.1,
-                "seed": 15,
-                "adam_epsilon": 1e-7,
-                "test_label_dummy": "test",
-                "make_all_labels_equal_max": True,
-                "is_seq_class": True,
-                "lowercase": True,
-                "gradient_accumulation_steps": 1,
-                "save_steps": 500,
-                "logging_steps": 500,
-                "output_dir": "models/{experiment_name}/{model_name}/{dataset_name}/{datetime}/",
-                "do_mask_words": False,
-                "mask_prob": 0.0,
-                "hid_to_attn_dropout": 0.10,
-                "attention_evidence_size": 100,
-                "final_hidden_layer_size": 300,
-                "initializer_name": "glorot",
-                "attention_activation": "soft",
-                "soft_attention": True,
-                "soft_attention_gamma": 0.1,
-                "soft_attention_alpha": 0.1,
-                "square_attention": True,
-                "freeze_bert_layers_up_to": 0,
-                "zero_n": 0,
-                "zero_delta": 0.0,
-            }
-
-            labels = ["O", "C"]
-            idx_pos = min([i for i, val in enumerate(labels) if val == "C"])
-            label_map = {i: label for i, label in enumerate(labels)}
-
-            config = AutoConfig.from_pretrained(
-                config_dict["model_name"],
-                id2label=label_map,
-                label2id={label: i for i, label in enumerate(labels)},
-                output_hidden_states=True,
-                output_attentions=True,
-            )
-            model = SeqClassModel(params_dict=config_dict, model_config=config)
-
         tokenizer = RobertaTokenizerFast.from_pretrained(
             args.tokenizer, add_prefix_space=True
         )
 
-    # Load model from path and put on device
-    model.load_state_dict(
-        torch.load(os.path.join(args.root, "models", args.model_path, "model.pt"))
-    )
-    model.to(device)
+    
 
     # Define test dataset
     if "wi_locness" in args.dataset:
@@ -170,6 +85,7 @@ def test(args):
             mode="dev",
             wi_locness_type="ABCN",
             include_special_tokens=False,
+            use_lowercase=args.use_lowercase,
             max_sequence_length=args.max_sequence_length,
         )
 
@@ -181,8 +97,12 @@ def test(args):
             token_label_mode="first",
             mode="test",
             include_special_tokens=False,
+            use_lowercase=args.use_lowercase,
             max_sequence_length=args.max_sequence_length,
         )
+
+    negative_label = test_dataset.negative_label
+    positive_label = test_dataset.positive_label
 
     print()
     print(f"Testing on dataset of length {len(test_dataset)}")
@@ -191,6 +111,154 @@ def test(args):
     test_loader = DataLoader(
         test_dataset, batch_size=args.batch_size, shuffle=False, collate_fn=collate_fn
     )
+
+    zero_shot_config_dict = {
+        "experiment_name": "final_soft_attention",
+        "dataset": args.dataset,
+        "model_name": args.model,
+        "max_seq_length": args.max_sequence_length,
+        "per_device_train_batch_size": args.batch_size,
+        "per_device_eval_batch_size": args.batch_size * 4,
+        "seed": args.seed,
+        "lowercase": args.use_lowercase,
+        "gradient_accumulation_steps": 1,
+        "save_steps": 500,
+        "logging_steps": 500,
+        "do_mask_words": False,
+        "mask_prob": 0.0,
+        "hid_to_attn_dropout": 0.10,
+        "attention_evidence_size": 100,
+        "final_hidden_layer_size": 300,
+        "initializer_name": "glorot",
+        "attention_activation": "soft",
+        "soft_attention": True,
+        "soft_attention_alpha": 0.1,
+        "soft_attention_gamma": 0.1,
+        "soft_attention_beta": 0.0,
+        "square_attention": True,
+        "freeze_bert_layers_up_to": 0,
+        "zero_n": 0,
+        "zero_delta": 0.0,
+    }
+
+    # Define model back bone and architecture
+    if "bert-base" in args.model:
+        if args.model_architecture == "joint":
+            model = TokenModel(
+                pretrained_model=args.model,
+                soft_attention_beta=args.soft_attention_beta,
+                sentence_loss_weight=args.sentence_loss_weight,
+                token_loss_weight=args.token_loss_weight,
+                regularizer_loss_weight=args.regularizer_loss_weight,
+                token_supervision=args.token_supervision,
+                sequence_supervision=args.sequence_supervision,
+                regularization_losses=args.regularization_losses,
+                normalise_supervised_losses=args.normalise_supervised_losses,
+                normalise_regularization_losses=args.normalise_regularization_losses,
+                subword_method=args.subword_method,
+                device=device,
+                debug=args.debug,
+            )
+        elif args.model_architecture == "zero_shot":
+            labels = [negative_label, positive_label]
+            label_map = {i: label for i, label in enumerate(labels)}
+
+            config = AutoConfig.from_pretrained(
+                args.model,
+                id2label=label_map,
+                label2id={label: i for i, label in enumerate(labels)},
+                output_hidden_states=True,
+                output_attentions=True,
+            )
+            model = SeqClassModel(
+                params_dict=zero_shot_config_dict, model_config=config
+            )
+        elif args.model_architecture == "base":
+            model_config = BertConfig.from_pretrained(args.model, num_labels=2)
+            model = BertForSequenceClassification(model_config)
+            model.classifier = torch.nn.Sequential(
+                torch.nn.Linear(in_features=768, out_features=1, bias=True),
+                torch.nn.Sigmoid(),
+            )
+    elif "deberta-base" in args.model:
+        if args.model_architecture == "joint":
+            model = TokenModel(
+                pretrained_model=args.model,
+                soft_attention_beta=args.soft_attention_beta,
+                sentence_loss_weight=args.sentence_loss_weight,
+                token_loss_weight=args.token_loss_weight,
+                regularizer_loss_weight=args.regularizer_loss_weight,
+                token_supervision=args.token_supervision,
+                sequence_supervision=args.sequence_supervision,
+                regularization_losses=args.regularization_losses,
+                normalise_supervised_losses=args.normalise_supervised_losses,
+                normalise_regularization_losses=args.normalise_regularization_losses,
+                subword_method=args.subword_method,
+                device=device,
+                debug=args.debug,
+            )
+        elif args.model_architecture == "zero_shot":
+            labels = [negative_label, positive_label]
+            label_map = {i: label for i, label in enumerate(labels)}
+
+            config = AutoConfig.from_pretrained(
+                args.model,
+                id2label=label_map,
+                label2id={label: i for i, label in enumerate(labels)},
+                output_hidden_states=True,
+                output_attentions=True,
+            )
+            model = SeqClassModel(
+                params_dict=zero_shot_config_dict, model_config=config
+            )
+        elif args.model_architecture == "base":
+            model_config = DebertaConfig.from_pretrained(args.model, num_labels=2)
+            model = DebertaForSequenceClassification(model_config)
+            model.classifier = torch.nn.Sequential(
+                torch.nn.Linear(in_features=768, out_features=1, bias=True),
+                torch.nn.Sigmoid(),
+            )
+
+    elif "roberta-base" in args.model:
+        if args.model_architecture == "joint":
+            model = TokenModel(
+                pretrained_model=args.model,
+                soft_attention_beta=args.soft_attention_beta,
+                sentence_loss_weight=args.sentence_loss_weight,
+                token_loss_weight=args.token_loss_weight,
+                regularizer_loss_weight=args.regularizer_loss_weight,
+                token_supervision=args.token_supervision,
+                sequence_supervision=args.sequence_supervision,
+                regularization_losses=args.regularization_losses,
+                normalise_supervised_losses=args.normalise_supervised_losses,
+                normalise_regularization_losses=args.normalise_regularization_losses,
+                subword_method=args.subword_method,
+                device=device,
+                debug=args.debug,
+            )
+        elif args.model_architecture == "zero_shot":
+            labels = [negative_label, positive_label]
+            label_map = {i: label for i, label in enumerate(labels)}
+
+            config = AutoConfig.from_pretrained(
+                args.model,
+                id2label=label_map,
+                label2id={label: i for i, label in enumerate(labels)},
+                output_hidden_states=True,
+                output_attentions=True,
+            )
+            model = SeqClassModel(
+                params_dict=zero_shot_config_dict, model_config=config
+            )
+        elif args.model_architecture == "base":
+            model_config = RobertaConfig.from_pretrained(args.model, num_labels=2)
+            model = RobertaForSequenceClassification(model_config)
+
+    # Load model from path and put on device
+    model.load_state_dict(
+        torch.load(os.path.join(args.root, "models", args.model_path, "model.pt"))
+    )
+    model.to(device)
 
     # Evaluation loop
     model.eval()
@@ -207,24 +275,6 @@ def test(args):
 
     preds = torch.tensor([], device=device)
     actuals = torch.tensor([], device=device)
-
-    # Log with wandb
-    if args.use_wandb:
-        wandb.init(project="multi-level-optimisation", entity="taylort1997")
-        wandb.config.update(args)
-        wandb.watch(model)
-        if args.mlo_model:
-            table = wandb.Table(
-                columns=[
-                    "Input Text",
-                    "Predicted Token Labels",
-                    "True Token Labels",
-                    "Predicted Label",
-                    "True Label",
-                ]
-            )
-        else:
-            table = wandb.Table(columns=["Input Text", "Predicted Label", "True Label"])
 
     with torch.no_grad():
         for idx, (sequences, labels, token_labels) in enumerate(test_loader):
@@ -260,7 +310,7 @@ def test(args):
             num_labels = len(labels)
 
             # If using mlo model pass inputs and token labels through mlo model
-            if args.mlo_model:
+            if args.model_architecture == "joint":
                 outputs = model(
                     input_ids,
                     attention_mask=attention_masks,
@@ -275,20 +325,23 @@ def test(args):
                 seq_logits = outputs["sequence_logits"]
                 token_logits = outputs["token_logits"]
 
-            # Otherwise pass inputs and sequence labels through basic pretrained model
-            else:
-                # outputs = model(
-                #     input_ids, attention_mask=attention_masks, labels=labels.long(),
-                # )
-                # loss = outputs.loss
-                # seq_logits = torch.argmax(outputs.logits, dim=1)
-                outputs = model(input_ids, attention_mask=attention_masks, labels=labels.long(),)
-                loss, logits, _ = outputs
+            elif args.model_architecture == "zero_shot":
+                outputs = model(
+                    input_ids, attention_mask=attention_masks, labels=labels.long(),
+                )
+                loss, logits, token_logits = outputs
                 seq_logits = torch.argmax(logits, dim=1)
+
+            elif args.model_architecture == "base":
+                outputs = model(
+                    input_ids, attention_mask=attention_masks, labels=labels.long(),
+                )
+                loss = outputs.loss
+                seq_logits = torch.argmax(outputs.logits, dim=1)
 
 
             # Calculate token prediction metrics
-            if args.mlo_model:
+            if args.model_architecture == "joint" or args.model_architecture == "zero_shot":
                 token_preds = (token_logits > 0.5).long()
 
                 token_true_positives = torch.sum(
@@ -333,51 +386,6 @@ def test(args):
             test_seq_false_positives += seq_false_positives
             test_seq_true_negatives += seq_true_negatives
             test_seq_false_negatives += seq_false_negatives
-
-            if args.use_wandb:
-                for i in range(len(labels)):
-                    if "deberta" in args.tokenizer:
-                        # Need to use gpt2 tokenizer due to bug with deberta tokenizer
-                        input_text = [
-                            tokenizer.gpt2_tokenizer.decode(
-                                [tokenizer.gpt2_tokenizer.sym(id)]
-                            )
-                            if tokenizer.gpt2_tokenizer.sym(id)
-                            not in tokenizer.all_special_tokens
-                            else tokenizer.gpt2_tokenizer.sym(id)
-                            for id in input_ids[i]
-                        ]
-                        input_text = list(
-                            filter(
-                                lambda x: x != "[CLS]"
-                                and x != "[SEP]"
-                                and x != "[PAD]",
-                                input_text,
-                            )
-                        )
-                        input_text = " ".join(input_text)
-                    else:
-                        input_text = tokenizer.decode(
-                            input_ids[i],
-                            skip_special_tokens=True,
-                            clean_up_tokenization_spaces=True,
-                        )
-                    true_label = seq_actuals[i].item()
-                    pred_label = seq_preds[i].item()
-
-                    if args.mlo_model:
-                        true_token_labels = token_labels[i][token_labels[i] != -1]
-                        pred_token_labels = token_preds[i][token_labels[i] != -1]
-                        table.add_data(
-                            input_text,
-                            str(pred_label),
-                            str(true_label),
-                            str(pred_token_labels),
-                            str(true_token_labels),
-                        )
-                    else:
-                        table.add_data(input_text, str(pred_label), str(true_label))
-                wandb.log({f"test samples: {args.dataset}": table})
 
     # Calculate test metrics
     seq_test_accuracy = (test_seq_true_positives + test_seq_true_negatives) / (
@@ -444,7 +452,10 @@ def test(args):
         print("Test sequence f1: {:.4f}".format(seq_test_f1))
         print("Test sequence f0.5: {:.4f}".format(seq_test_f05))
         print()
-        if args.mlo_model:
+        if (
+                args.model_architecture == "joint"
+                or args.model_architecture == "zero_shot"
+            ):
             print("Test token accuracy: {:.4f}".format(token_test_accuracy))
             print("Test token precision: {:.4f}".format(token_test_precision))
             print("Test token recall: {:.4f}".format(token_test_recall))
@@ -486,10 +497,11 @@ if __name__ == "__main__":
     )
 
     parser.add(
-        "--mlo_model",
-        action="store_true",
-        default=False,
-        help="Use multi-level optimisation model (default: False)",
+        "--model_architecture",
+        action="store",
+        type=str,
+        default="joint",
+        help="Model architecture to use (default: joint)",
     )
 
     parser.add(
@@ -564,6 +576,18 @@ if __name__ == "__main__":
         default=512,
         help="Maximum sequence length to input to model (default: 512)",
     )
+
+    parser.add(
+        "--use_lowercase",
+        action="store_true",
+        default=False,
+        help="Use lowercase as input (default: False)",
+    )
+
+    parser.add(
+        "--seed", action="store", type=int, default=666, help="Random seed for model",
+    )
+
 
     args = parser.parse_args()
     test(args)

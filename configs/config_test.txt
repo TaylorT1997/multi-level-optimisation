@@ -4,15 +4,16 @@ root = "/home/taylort/Projects/multi-level-optimisation/"
 
 model = "roberta-base"
 tokenizer = "roberta-base"
-mlo_model = false
+model_architecture = zero_shot
 
-dataset = "conll_10"
+dataset = "wi_locness"
 batch_size = 32
 
-model_path = "conll_10_2021_07_13_09_15_28"
+model_path = "wi_locness_2021_07_13_23_54_59"
 
 max_sequence_length = 512
 soft_attention_beta = 2
 subword_method = "max"
+use_lowercase = true
 
 use_wandb = false
