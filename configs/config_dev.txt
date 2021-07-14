@@ -4,7 +4,7 @@ root = "/home/tom/Projects/multi-level-optimisation/"
 
 model = "roberta-base"
 tokenizer = "roberta-base"
-model_architecture = joint
+model_architecture = zero_shot
 
 dataset = "conll_10"
 

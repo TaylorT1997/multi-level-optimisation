@@ -55,7 +55,9 @@ logger = logging.getLogger(__name__)
 
 
 class SoftAttentionSeqClassModel(nn.Module):
-    def __init__(self, config_dict, bert_out_size, num_labels, debug=True):
+    def __init__(
+        self, config_dict, bert_out_size, num_labels, supervise_tokens=True, debug=False
+    ):
         super().__init__()
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.debug = debug
@@ -63,6 +65,7 @@ class SoftAttentionSeqClassModel(nn.Module):
         self.initializer_name = config_dict["initializer_name"]
         self.square_attention = config_dict.get("square_attention", False)
         self.num_labels = num_labels
+        self.supervise_tokens = supervise_tokens
 
         self.alpha = config_dict.get("soft_attention_alpha", 0.0)
         self.gamma = config_dict.get(
@@ -201,8 +204,6 @@ class SoftAttentionSeqClassModel(nn.Module):
             print(f"self.sentence_scores shape: \n{self.sentence_scores.shape}\n")
             print(f"self.sentence_scores: \n{self.sentence_scores}\n")
 
-            sys.exit()
-
         outputs = (
             self.sentence_scores,
             torch.cat(
@@ -216,6 +217,7 @@ class SoftAttentionSeqClassModel(nn.Module):
         loss = None
 
         if labels is not None:
+            # SEQUENCE LOSS
             if self.num_labels == 1:
                 #  We are doing regression
                 loss_fct = MSELoss()
@@ -225,6 +227,7 @@ class SoftAttentionSeqClassModel(nn.Module):
                 loss = loss_fct(
                     self.sentence_scores.view(-1, self.num_labels), labels.view(-1)
                 )
+
             if self.alpha != 0:
                 min_attentions, _ = torch.min(
                     torch.where(
@@ -238,6 +241,10 @@ class SoftAttentionSeqClassModel(nn.Module):
 
                 loss += l2
 
+            if self.debug:
+                print(f"alpha min_attentions: \n{min_attentions}\n")
+                print(f"alpha l2: \n{l2}\n")
+
             if self.gamma != 0:
                 # don't include 0 for CLS token
                 attn_weights_masked = torch.where(
@@ -249,49 +256,80 @@ class SoftAttentionSeqClassModel(nn.Module):
                 l3 = self.gamma * torch.mean(
                     torch.square(max_attentions.view(-1) - labels.view(-1))
                 )
-                # logger.info("labels: " + str(labels.view(-1)))
-
                 loss += l3
-            if self.beta != 0.0 and token_scores is not None:
-                loss_fct = MSELoss()
-                # only supervise the first token of a word - ignore the rest (with labels==-100)
-                # create a mask to remove attn values for token scores == -100:
-                masked_token_scores = torch.where(
-                    token_scores[:, 1:] != -100,
-                    token_scores[:, 1:],
-                    torch.zeros_like(token_scores[:, 1:]),
-                )
 
-                attn_weights_supervised = self.attention_weights_unnormalised
-                if self.normalise_labels:
-                    attn_weights_supervised = self.attention_weights_normalised
+            if self.debug:
+                print(f"gamma attn_weights_masked: \n{attn_weights_masked}\n")
+                print(f"gamma max_attentions: \n{max_attentions}\n")
+                print(f"gamma l3: \n{l3}\n")
 
-                masked_attn_scores = torch.where(
-                    token_scores[:, 1:] != -100,
-                    attn_weights_supervised,
-                    torch.zeros_like(attn_weights_supervised),
+                print(f"token_labels: \n{token_labels}\n")
+
+            if self.supervise_tokens == True:
+                token_labels = token_labels[:, 1:]
+                zero_labels = torch.where(
+                    token_labels == 1, token_labels, torch.zeros_like(token_labels)
                 )
-                l4 = loss_fct(masked_token_scores.view(-1), masked_attn_scores.view(-1))
-                loss += self.beta * l4
-            if self.zero_delta != 0.0 and self.zero_n != 0:
-                attn_weights_masked = torch.where(
-                    self._sequence_mask(inp_lengths, maxlen=bert_length),
+                masked_token_attention = torch.where(
+                    ((token_labels == 0) | (token_labels == 1)),
                     self.attention_weights_unnormalised,
-                    torch.zeros_like(self.attention_weights_unnormalised) + 1e6,
+                    torch.zeros_like(token_labels),
                 )
-                attn_weights_sorted = attn_weights_masked.sort(dim=1)[0][
-                    :, : self.zero_n
-                ]
+                mse_loss = nn.MSELoss(reduction="mean")
+                token_loss = mse_loss(masked_token_attention, zero_labels)
 
-                attn_weights_mean = torch.mean(
-                    torch.square(attn_weights_sorted).view(-1)
-                )
-                # logger.info("attn_weigts_mean: " + str(attn_weights_sorted))
+                loss += token_loss
 
-                l5 = attn_weights_mean
-                loss += self.zero_delta * l5
+            if self.debug:
+                print(f"zero_labels: \n{zero_labels}\n")
+                print(f"masked_token_attention: \n{masked_token_attention}\n")
+                print(f"token_loss: \n{token_loss}\n")
+
+            # if self.beta != 0.0 and token_scores is not None:
+            #     loss_fct = MSELoss()
+            #     # only supervise the first token of a word - ignore the rest (with labels==-100)
+            #     # create a mask to remove attn values for token scores == -100:
+            #     masked_token_scores = torch.where(
+            #         token_scores[:, 1:] != -100,
+            #         token_scores[:, 1:],
+            #         torch.zeros_like(token_scores[:, 1:]),
+            #     )
+
+            #     attn_weights_supervised = self.attention_weights_unnormalised
+            #     if self.normalise_labels:
+            #         attn_weights_supervised = self.attention_weights_normalised
+
+            #     masked_attn_scores = torch.where(
+            #         token_scores[:, 1:] != -100,
+            #         attn_weights_supervised,
+            #         torch.zeros_like(attn_weights_supervised),
+            #     )
+            #     l4 = loss_fct(masked_token_scores.view(-1), masked_attn_scores.view(-1))
+            #     loss += self.beta * l4
+
+            # if self.zero_delta != 0.0 and self.zero_n != 0:
+            #     attn_weights_masked = torch.where(
+            #         self._sequence_mask(inp_lengths, maxlen=bert_length),
+            #         self.attention_weights_unnormalised,
+            #         torch.zeros_like(self.attention_weights_unnormalised) + 1e6,
+            #     )
+            #     attn_weights_sorted = attn_weights_masked.sort(dim=1)[0][
+            #         :, : self.zero_n
+            #     ]
+
+            #     attn_weights_mean = torch.mean(
+            #         torch.square(attn_weights_sorted).view(-1)
+            #     )
+            #     # logger.info("attn_weigts_mean: " + str(attn_weights_sorted))
+
+            #     l5 = attn_weights_mean
+            #     loss += self.zero_delta * l5
 
             outputs = (loss,) + outputs
+
+            if self.debug:
+                print(f"outputs: \n{outputs}\n")
+                sys.exit()
 
         return outputs
 

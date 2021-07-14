@@ -278,7 +278,6 @@ class TokenModel(nn.Module):
             print(
                 f"sentence_classification_output: \n{sentence_classification_output}\n"
             )
-            sys.exit()
 
         # Calculate the model loss
         (
@@ -355,6 +354,14 @@ class TokenModel(nn.Module):
             word_attention_output,
         )
 
+        if self.debug:
+            print(
+                f"word_attention_output_ones_mask: \n{word_attention_output_ones_mask}\n"
+            )
+            print(
+                f"word_attention_output_ones_mask shape: \n{word_attention_output_ones_mask.shape}\n"
+            )
+
         # Calculate regularisation losses
         regularizer_loss_a = torch.sum(
             torch.pow(
@@ -406,6 +413,7 @@ class TokenModel(nn.Module):
 
         if self.debug:
             print(f"total_loss: \n{total_loss}\n")
+            sys.exit()
 
         return (
             total_loss,
