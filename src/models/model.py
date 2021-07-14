@@ -27,6 +27,7 @@ class TokenModel(nn.Module):
         normalise_supervised_losses=False,
         normalise_regularization_losses=False,
         subword_method="max",
+        mask_subwords=False,
         device="cuda",
         debug=False,
     ):
@@ -72,6 +73,7 @@ class TokenModel(nn.Module):
         self.sequence_supervision = sequence_supervision
         self.regularization_losses = regularization_losses
         self.subword_method = subword_method
+        self.mask_subwords = mask_subwords
 
         self.device = device
         self.debug = debug
@@ -200,17 +202,47 @@ class TokenModel(nn.Module):
             )
             print(f"masked_token_attention_output: \n{masked_token_attention_output}\n")
 
-        # Normalise the attention output
-        token_attention_output_normalised = torch.pow(
-            masked_token_attention_output, self.soft_attention_beta
-        ) / (
-            torch.sum(
-                torch.pow(masked_token_attention_output, self.soft_attention_beta),
-                dim=1,
-                keepdim=True,
-            )
-            + 1e-10
+        word_attention_mask = torch.where(
+            ((labels == 0) | (labels == 1) | (labels == -2)),
+            torch.ones_like(labels),
+            torch.zeros_like(labels),
         )
+
+        masked_word_attention_output = torch.mul(
+            word_attention_output, word_attention_mask
+        )
+
+        if self.debug:
+            print(f"word_attention_mask: \n{word_attention_mask}\n")
+
+            print(
+                f"masked_word_attention_output shape: \n{masked_word_attention_output.shape}\n"
+            )
+            print(f"masked_word_attention_output: \n{masked_word_attention_output}\n")
+
+        # Normalise the attention output
+        if self.mask_subwords:
+            token_attention_output_normalised = torch.pow(
+                masked_token_attention_output, self.soft_attention_beta
+            ) / (
+                torch.sum(
+                    torch.pow(masked_token_attention_output, self.soft_attention_beta),
+                    dim=1,
+                    keepdim=True,
+                )
+                + 1e-10
+            )
+        else:
+            token_attention_output_normalised = torch.pow(
+                masked_word_attention_output, self.soft_attention_beta
+            ) / (
+                torch.sum(
+                    torch.pow(masked_word_attention_output, self.soft_attention_beta),
+                    dim=1,
+                    keepdim=True,
+                )
+                + 1e-10
+            )
 
         if self.debug:
             print(
@@ -246,6 +278,7 @@ class TokenModel(nn.Module):
             print(
                 f"sentence_classification_output: \n{sentence_classification_output}\n"
             )
+            sys.exit()
 
         # Calculate the model loss
         (
@@ -255,7 +288,10 @@ class TokenModel(nn.Module):
             regularizer_loss_a,
             regularizer_loss_b,
         ) = self._calculate_loss(
-            masked_token_attention_output, sentence_classification_output, labels,
+            masked_token_attention_output,
+            masked_word_attention_output,
+            sentence_classification_output,
+            labels,
         )
 
         output = {
@@ -272,7 +308,11 @@ class TokenModel(nn.Module):
         return output
 
     def _calculate_loss(
-        self, token_attention_output, sentence_classification_output, labels,
+        self,
+        token_attention_output,
+        word_attention_output,
+        sentence_classification_output,
+        labels,
     ):
         if self.debug:
             print(f"token_attention_output: \n{token_attention_output}\n")
@@ -303,29 +343,29 @@ class TokenModel(nn.Module):
             print(f"zero_labels: \n{zero_labels}\n")
             print(f"zero_labels shape: \n{zero_labels.shape}\n")
 
-        # Normalise the MSE losses (optionally)+
+        # Normalise the MSE losses (optionally)
         if self.normalise_supervised_losses:
             sentence_loss = sentence_loss / batch_size
             token_loss = token_loss / batch_size
 
         # Create token attention tensor with mask of ones instead of zeros
-        token_attention_output_ones_mask = torch.where(
-            token_attention_output == 0,
-            torch.ones_like(token_attention_output),
-            token_attention_output,
+        word_attention_output_ones_mask = torch.where(
+            word_attention_output == 0,
+            torch.ones_like(word_attention_output),
+            word_attention_output,
         )
 
         # Calculate regularisation losses
         regularizer_loss_a = torch.sum(
             torch.pow(
-                torch.min(token_attention_output_ones_mask, dim=1, keepdim=True).values
+                torch.min(word_attention_output_ones_mask, dim=1, keepdim=True).values
                 - 0,
                 2,
             )
         )
         regularizer_loss_b = torch.sum(
             torch.pow(
-                torch.max(token_attention_output, dim=1, keepdim=True,).values
+                torch.max(word_attention_output, dim=1, keepdim=True,).values
                 - sentence_labels,
                 2,
             )

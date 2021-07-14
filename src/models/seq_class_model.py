@@ -129,11 +129,12 @@ class SoftAttentionSeqClassModel(nn.Module):
         head_mask=None,
         inputs_embeds=None,
         labels=None,
+        token_labels=None,
         output_attentions=None,
         output_hidden_states=None,
         return_dict=None,
         token_scores=None,
-        **kwargs
+        **kwargs,
     ):
         inp_lengths = (attention_mask != 0).sum(dim=1) - 1  # exc CLS removed next
         bert_length = input_ids.shape[1] - 1
@@ -142,11 +143,25 @@ class SoftAttentionSeqClassModel(nn.Module):
         attn_evidence = torch.tanh(self.attention_evidence(after_dropout))
         attn_weights = self.attention_weights(attn_evidence)
 
+        if self.debug:
+            print(f"bert_hidden_outputs shape: \n{bert_hidden_outputs.shape}\n")
+            print(f"bert_hidden_outputs: \n{bert_hidden_outputs}\n")
+
+            print(f"attn_evidence shape: \n{attn_evidence.shape}\n")
+            print(f"attn_evidence: \n{attn_evidence}\n")
+
+            print(f"attn_weights shape: \n{attn_weights.shape}\n")
+            print(f"attn_weights: \n{attn_weights}\n")
+
         attn_weights = attn_weights.view(
             bert_hidden_outputs.size()[:2]
         )  # batch_size, seq_length
 
         attn_weights = self.attention_act(attn_weights)
+
+        if self.debug:
+            print(f"attn_weights_after_activation shape: \n{attn_weights.shape}\n")
+            print(f"attn_weights_after_activation: \n{attn_weights}\n")
 
         attn_weights = torch.where(
             self._sequence_mask(inp_lengths, maxlen=bert_length),
@@ -154,12 +169,20 @@ class SoftAttentionSeqClassModel(nn.Module):
             torch.zeros_like(attn_weights),  # seq length
         )
 
+        if self.debug:
+            print(f"attn_weights_masked shape: \n{attn_weights.shape}\n")
+            print(f"attn_weights_masked: \n{attn_weights}\n")
+
         self.attention_weights_unnormalised = attn_weights
         if self.square_attention:
             attn_weights = torch.square(attn_weights)
         # normalise attn weights
         attn_weights = attn_weights / torch.sum(attn_weights, dim=1, keepdim=True)
         self.attention_weights_normalised = attn_weights
+
+        if self.debug:
+            print(f"attn_weights_normalised shape: \n{attn_weights.shape}\n")
+            print(f"attn_weights_normalised: \n{attn_weights}\n")
 
         proc_tensor = torch.bmm(
             after_dropout.transpose(1, 2), attn_weights.unsqueeze(2)
@@ -170,6 +193,15 @@ class SoftAttentionSeqClassModel(nn.Module):
         self.sentence_scores = self.sentence_scores.view(
             [bert_hidden_outputs.shape[0], self.num_labels]
         )
+
+        if self.debug:
+            print(f"proc_tensor shape: \n{proc_tensor.shape}\n")
+            print(f"proc_tensor: \n{proc_tensor}\n")
+
+            print(f"self.sentence_scores shape: \n{self.sentence_scores.shape}\n")
+            print(f"self.sentence_scores: \n{self.sentence_scores}\n")
+
+            sys.exit()
 
         outputs = (
             self.sentence_scores,
@@ -344,11 +376,12 @@ class SeqClassModel(PreTrainedModel):
         head_mask=None,
         inputs_embeds=None,
         labels=None,
+        token_labels=None,
         output_attentions=None,
         output_hidden_states=None,
         return_dict=None,
         token_scores=None,
-        **kwargs
+        **kwargs,
     ):
         r"""
         labels (:obj:`torch.LongTensor` of shape :obj:`(batch_size,)`, `optional`):
@@ -376,8 +409,9 @@ class SeqClassModel(PreTrainedModel):
                 head_mask=head_mask,
                 inputs_embeds=inputs_embeds,
                 labels=labels,
+                token_labels=token_labels,
                 token_scores=token_scores,
-                **kwargs
+                **kwargs,
             )  # (loss), logits, word attentions
         else:
             pooled_output = outputs[1]

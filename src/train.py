@@ -450,7 +450,10 @@ def train(args):
 
             elif args.model_architecture == "zero_shot":
                 outputs = model(
-                    input_ids, attention_mask=attention_masks, labels=labels.long(),
+                    input_ids,
+                    attention_mask=attention_masks,
+                    labels=labels.long(),
+                    token_labels=token_labels,
                 )
                 loss, logits, token_logits = outputs
                 seq_logits = torch.argmax(logits, dim=1)
@@ -685,12 +688,17 @@ def train(args):
                     regularizer_loss_b = outputs["regularizer_loss_b"]
                     seq_logits = outputs["sequence_logits"]
                     token_logits = outputs["token_logits"]
+
                 elif args.model_architecture == "zero_shot":
                     outputs = model(
-                        input_ids, attention_mask=attention_masks, labels=labels.long(),
+                        input_ids,
+                        attention_mask=attention_masks,
+                        labels=labels.long(),
+                        token_labels=token_labels,
                     )
                     loss, logits, token_logits = outputs
                     seq_logits = torch.argmax(logits, dim=1)
+
                 elif args.model_architecture == "base":
                     outputs = model(
                         input_ids, attention_mask=attention_masks, labels=labels.long(),
