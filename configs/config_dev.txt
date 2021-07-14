@@ -14,7 +14,7 @@ learning_rate = 2e-5
 early_stopping_patience = 20
 early_stopping_objective = "seq_f1"
 
-lr_optimizer = adam
+lr_optimizer = adamw
 lr_momentum = 0.9
 lr_weight_decay = 0.1
 lr_epsilon = 1e-7

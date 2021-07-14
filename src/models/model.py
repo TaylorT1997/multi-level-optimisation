@@ -12,11 +12,6 @@ from transformers import (
 import sys
 
 
-def bmul(vec, mat, axis=0):
-    mat = mat.transpose(axis, -1)
-    return (mat * vec.expand_as(mat)).transpose(axis, -1)
-
-
 class TokenModel(nn.Module):
     def __init__(
         self,

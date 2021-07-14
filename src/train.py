@@ -520,9 +520,7 @@ def train(args):
             train_step += 1
 
             if args.use_wandb:
-                if (
-                    args.model_architecture == "joint"
-                ):
+                if args.model_architecture == "joint":
                     wandb.log(
                         {
                             "train_losses/total_loss": loss.item(),
@@ -622,9 +620,7 @@ def train(args):
         val_token_false_negatives = 0
 
         if args.use_wandb:
-            if (
-                args.model_architecture == "joint"
-            ):
+            if args.model_architecture == "joint":
                 table = wandb.Table(
                     columns=[
                         "Input Text",
@@ -703,7 +699,10 @@ def train(args):
                     seq_logits = torch.argmax(outputs.logits, dim=1)
 
                 # Calculate token prediction metrics
-                if args.model_architecture == "joint" or args.model_architecture == "zero_shot":
+                if (
+                    args.model_architecture == "joint"
+                    or args.model_architecture == "zero_shot"
+                ):
                     token_preds = (token_logits > 0.5).long()
 
                     token_true_positives = torch.sum(
@@ -751,9 +750,7 @@ def train(args):
                 val_step += 1
 
                 if args.use_wandb:
-                    if (
-                        args.model_architecture == "joint"
-                    ):
+                    if args.model_architecture == "joint":
                         wandb.log(
                             {
                                 "val_losses/total_loss": loss.item(),
@@ -802,9 +799,7 @@ def train(args):
                         true_label = seq_actuals[i].long().item()
                         pred_label = seq_preds[i].long().item()
 
-                        if (
-                            args.model_architecture == "joint"
-                        ):
+                        if args.model_architecture == "joint":
                             true_token_labels = (
                                 token_labels[i][
                                     (token_labels[i] == 0) | (token_labels[i] == 1)
@@ -930,7 +925,10 @@ def train(args):
             print("Validation sequence f1: {:.4f}".format(seq_val_f1))
             print("Validation sequence f0.5: {:.4f}".format(seq_val_f05))
             print()
-            if args.model_architecture == "joint" or args.model_architecture == "zero_shot":
+            if (
+                args.model_architecture == "joint"
+                or args.model_architecture == "zero_shot"
+            ):
                 print("Validation token accuracy: {:.4f}".format(token_val_accuracy))
                 print("Validation token precision: {:.4f}".format(token_val_precision))
                 print("Validation token recall: {:.4f}".format(token_val_recall))
