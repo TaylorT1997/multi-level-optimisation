@@ -24,12 +24,14 @@ from transformers import (
     DebertaForSequenceClassification,
     DebertaConfig,
     GPT2TokenizerFast,
-    AutoConfig
+    AutoConfig,
 )
 
 from data_loading.datasets import BinaryTokenTSVDataset
 from models.model import TokenModel
 from models.seq_class_model import SeqClassModel
+
+from sklearn.metrics import average_precision_score
 
 import wandb
 
@@ -72,8 +74,6 @@ def test(args):
         tokenizer = RobertaTokenizerFast.from_pretrained(
             args.tokenizer, add_prefix_space=True
         )
-
-    
 
     # Define test dataset
     if "wi_locness" in args.dataset:
@@ -273,6 +273,9 @@ def test(args):
     test_token_true_negatives = 0
     test_token_false_negatives = 0
 
+    test_token_total_ap = 0
+    num_map_scores = 0
+
     preds = torch.tensor([], device=device)
     actuals = torch.tensor([], device=device)
 
@@ -339,9 +342,12 @@ def test(args):
                 loss = outputs.loss
                 seq_logits = torch.argmax(outputs.logits, dim=1)
 
-
             # Calculate token prediction metrics
-            if args.model_architecture == "joint" or args.model_architecture == "zero_shot":
+            if (
+                args.model_architecture == "joint"
+                or args.model_architecture == "zero_shot"
+            ):
+                # Calculate TP, FP, TN, FN
                 token_preds = (token_logits > 0.5).long()
 
                 token_true_positives = torch.sum(
@@ -361,6 +367,24 @@ def test(args):
                 test_token_false_positives += token_false_positives
                 test_token_true_negatives += token_true_negatives
                 test_token_false_negatives += token_false_negatives
+
+                # Calculate mAP
+                token_labels_np = token_labels.detach().cpu().numpy()
+                token_logits_np = token_logits.detach().cpu().numpy()
+
+                for i in range(len(token_labels_np)):
+                    if np.max(token_labels_np[i]) == 1:
+                        ap = average_precision_score(
+                            token_labels_np[i][
+                                (token_labels_np[i] == 1) | (token_labels_np[i] == 0)
+                            ],
+                            token_logits_np[i][
+                                (token_labels_np[i] == 1) | (token_labels_np[i] == 0)
+                            ],
+                        )
+
+                        test_token_total_ap += ap
+                        num_map_scores += 1
 
             # Calculate sequence prediction metrics
             seq_preds = (seq_logits.view(-1) > 0.5).long()
@@ -428,6 +452,8 @@ def test(args):
         0.25 * token_test_precision + token_test_recall + 1e-99
     )
 
+    token_test_map = test_token_total_ap / num_map_scores
+
     if args.use_wandb:
         wandb.log(
             {
@@ -441,6 +467,7 @@ def test(args):
                 "token_recall_test": token_test_recall,
                 "token_f1_test": token_test_f1,
                 "token_f0.5_test": token_test_f05,
+                "token_map": token_test_map,
             }
         )
 
@@ -452,15 +479,13 @@ def test(args):
         print("Test sequence f1: {:.4f}".format(seq_test_f1))
         print("Test sequence f0.5: {:.4f}".format(seq_test_f05))
         print()
-        if (
-                args.model_architecture == "joint"
-                or args.model_architecture == "zero_shot"
-            ):
+        if args.model_architecture == "joint" or args.model_architecture == "zero_shot":
             print("Test token accuracy: {:.4f}".format(token_test_accuracy))
             print("Test token precision: {:.4f}".format(token_test_precision))
             print("Test token recall: {:.4f}".format(token_test_recall))
             print("Test token f1: {:.4f}".format(token_test_f1))
             print("Test token f0.5: {:.4f}".format(token_test_f05))
+            print("Test token mAP: {:.4f}".format(token_test_map))
             print()
 
 
@@ -587,7 +612,6 @@ if __name__ == "__main__":
     parser.add(
         "--seed", action="store", type=int, default=666, help="Random seed for model",
     )
-
 
     args = parser.parse_args()
     test(args)

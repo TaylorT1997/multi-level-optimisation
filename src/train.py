@@ -5,6 +5,7 @@ import datetime
 import os
 import configargparse
 import math
+import numpy as np
 
 import torch
 from torch._C import device
@@ -31,6 +32,8 @@ from transformers import (
 from data_loading.datasets import BinaryTokenTSVDataset
 from models.model import TokenModel
 from models.seq_class_model import SeqClassModel
+
+from sklearn.metrics import average_precision_score
 
 import wandb
 
@@ -400,6 +403,9 @@ def train(args):
         train_token_true_negatives = 0
         train_token_false_negatives = 0
 
+        train_token_total_ap = 0
+        num_map_scores = 0
+
         for idx, (sequences, labels, token_labels) in enumerate(train_loader):
             # Zero any accumulated gradients
             optimizer.zero_grad()
@@ -477,6 +483,7 @@ def train(args):
                 args.model_architecture == "joint"
                 or args.model_architecture == "zero_shot"
             ):
+                # Calculate TP, FP, TN, FN
                 token_preds = (token_logits > 0.5).long()
                 token_true_positives = torch.sum(
                     torch.logical_and(token_preds == 1, token_labels == 1)
@@ -495,6 +502,24 @@ def train(args):
                 train_token_false_positives += token_false_positives
                 train_token_true_negatives += token_true_negatives
                 train_token_false_negatives += token_false_negatives
+
+                # Calculate mAP
+                token_labels_np = token_labels.detach().cpu().numpy()
+                token_logits_np = token_logits.detach().cpu().numpy()
+
+                for i in range(len(token_labels_np)):
+                    if np.max(token_labels_np[i]) == 1:
+                        ap = average_precision_score(
+                            token_labels_np[i][
+                                (token_labels_np[i] == 1) | (token_labels_np[i] == 0)
+                            ],
+                            token_logits_np[i][
+                                (token_labels_np[i] == 1) | (token_labels_np[i] == 0)
+                            ],
+                        )
+
+                        train_token_total_ap += ap
+                        num_map_scores += 1
 
             # Calculate sequence prediction metrics
             seq_preds = (seq_logits.view(-1) > 0.5).long()
@@ -587,6 +612,8 @@ def train(args):
             0.25 * token_train_precision + token_train_recall + 1e-99
         )
 
+        token_train_map = train_token_total_ap / num_map_scores
+
         train_av_loss = train_total_loss / (train_batches + 1e-99)
 
         if args.use_wandb:
@@ -603,6 +630,7 @@ def train(args):
                     "train_metrics/token_recall": token_train_recall,
                     "train_metrics/token_f1": token_train_f1,
                     "train_metrics/token_f0.5": token_train_f05,
+                    "train_metrics/token_map": token_train_map,
                     "epoch": epoch,
                 }
             )
@@ -621,6 +649,9 @@ def train(args):
         val_token_false_positives = 0
         val_token_true_negatives = 0
         val_token_false_negatives = 0
+
+        val_token_total_ap = 0
+        num_map_scores = 0
 
         if args.use_wandb:
             if args.model_architecture == "joint":
@@ -711,6 +742,7 @@ def train(args):
                     args.model_architecture == "joint"
                     or args.model_architecture == "zero_shot"
                 ):
+                    # Calculate TP, FP, TN, FN
                     token_preds = (token_logits > 0.5).long()
 
                     token_true_positives = torch.sum(
@@ -730,6 +762,26 @@ def train(args):
                     val_token_false_positives += token_false_positives
                     val_token_true_negatives += token_true_negatives
                     val_token_false_negatives += token_false_negatives
+
+                    # Calculate mAP
+                    token_labels_np = token_labels.detach().cpu().numpy()
+                    token_logits_np = token_logits.detach().cpu().numpy()
+
+                    for i in range(len(token_labels_np)):
+                        if np.max(token_labels_np[i]) == 1:
+                            ap = average_precision_score(
+                                token_labels_np[i][
+                                    (token_labels_np[i] == 1)
+                                    | (token_labels_np[i] == 0)
+                                ],
+                                token_logits_np[i][
+                                    (token_labels_np[i] == 1)
+                                    | (token_labels_np[i] == 0)
+                                ],
+                            )
+
+                            val_token_total_ap += ap
+                            num_map_scores += 1
 
                 # Calculate sequence prediction metrics
                 seq_preds = (seq_logits.view(-1) > 0.5).long()
@@ -882,6 +934,8 @@ def train(args):
             0.25 * token_val_precision + token_val_recall + 1e-99
         )
 
+        token_val_map = val_token_total_ap / num_map_scores
+
         val_av_loss = val_total_loss / val_batches
 
         if args.use_wandb:
@@ -898,6 +952,7 @@ def train(args):
                     "val_metrics/token_recall": token_val_recall,
                     "val_metrics/token_f1": token_val_f1,
                     "val_metrics/token_f0.5": token_val_f05,
+                    "val_metrics/token_map": token_val_map,
                     "epoch": epoch,
                 }
             )
@@ -926,6 +981,7 @@ def train(args):
                 print("Training token recall: {:.4f}".format(token_train_recall))
                 print("Training token f1: {:.4f}".format(token_train_f1))
                 print("Training token f0.5: {:.4f}".format(token_train_f05))
+                print("Training token mAP: {:.4f}".format(token_train_map))
                 print()
             print("Validation sequence accuracy: {:.4f}".format(seq_val_accuracy))
             print("Validation sequence precision: {:.4f}".format(seq_val_precision))
@@ -942,6 +998,7 @@ def train(args):
                 print("Validation token recall: {:.4f}".format(token_val_recall))
                 print("Validation token f1: {:.4f}".format(token_val_f1))
                 print("Validation token f0.5: {:.4f}".format(token_val_f05))
+                print("Validation token mAP: {:.4f}".format(token_val_map))
                 print()
 
             print("Learning rate value: {}".format(scheduler.get_last_lr()[0]))
@@ -990,12 +1047,14 @@ def train(args):
                 best_token_train_recall = token_train_recall
                 best_token_train_f1 = token_train_f1
                 best_token_train_f05 = token_train_f05
+                best_token_train_map = token_train_map
 
                 best_token_val_accuracy = token_val_accuracy
                 best_token_val_precision = token_val_precision
                 best_token_val_recall = token_val_recall
                 best_token_val_f1 = token_val_f1
                 best_token_val_f05 = token_val_f05
+                best_token_val_map = token_val_map
 
             no_improvement_num = 0
 
@@ -1033,11 +1092,13 @@ def train(args):
                     "train_summary_metrics/best_token_recall": best_token_train_recall,
                     "train_summary_metrics/best_token_f1": best_token_train_f1,
                     "train_summary_metrics/best_token_f0.5": best_token_train_f05,
+                    "train_summary_metrics/best_token_map": best_token_train_map,
                     "val_summary_metrics/best_token_accuracy": best_token_val_accuracy,
                     "val_summary_metrics/best_token_precision": best_token_val_precision,
                     "val_summary_metrics/best_token_recall": best_token_val_recall,
                     "val_summary_metrics/best_token_f1": best_token_val_f1,
                     "val_summary_metrics/best_token_f0.5": best_token_val_f05,
+                    "val_summary_metrics/best_token_map": best_token_val_map,
                     "training_time": training_time,
                 }
             )
@@ -1100,6 +1161,7 @@ def train(args):
             print("Best training token recall: {:.4f}".format(best_token_train_recall))
             print("Best training token f1: {:.4f}".format(best_token_train_f1))
             print("Best training token f0.5: {:.4f}".format(best_token_train_f05))
+            print("Best training token mAP: {:.4f}".format(best_token_train_map))
             print()
             print(
                 "Best validation token accuracy: {:.4f}".format(best_token_val_accuracy)
@@ -1112,6 +1174,7 @@ def train(args):
             print("Best validation token recall: {:.4f}".format(best_token_val_recall))
             print("Best validation token f1: {:.4f}".format(best_token_val_f1))
             print("Best validation token f0.5: {:.4f}".format(best_token_val_f05))
+            print("Best validation token mAP: {:.4f}".format(best_token_val_map))
             print()
         print("Training time: {:.0f}".format(training_time))
 
