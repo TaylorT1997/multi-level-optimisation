@@ -330,7 +330,7 @@ def test(args):
 
             elif args.model_architecture == "zero_shot":
                 outputs = model(
-                    input_ids, attention_mask=attention_masks, labels=labels.long(),
+                    input_ids, attention_mask=attention_masks, labels=labels.long(), token_labels=token_labels
                 )
                 loss, logits, token_logits = outputs
                 seq_logits = torch.argmax(logits, dim=1)

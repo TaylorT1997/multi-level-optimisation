@@ -6,10 +6,10 @@ model = "roberta-base"
 tokenizer = "roberta-base"
 model_architecture = zero_shot
 
-dataset = "wi_locness"
-batch_size = 32
+dataset = "fce"
+batch_size = 64
 
-model_path = "wi_locness_2021_07_13_23_54_59"
+model_path = "fce_2021_07_14_21_26_57"
 
 max_sequence_length = 512
 soft_attention_beta = 2
