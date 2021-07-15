@@ -9,7 +9,7 @@ model_architecture = zero_shot
 dataset = "conll_10"
 
 epochs = 1
-batch_size = 12
+batch_size = 2
 learning_rate = 2e-5
 early_stopping_patience = 20
 early_stopping_objective = "seq_f1"

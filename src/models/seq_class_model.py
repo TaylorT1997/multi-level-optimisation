@@ -93,6 +93,8 @@ class SoftAttentionSeqClassModel(nn.Module):
             config_dict["final_hidden_layer_size"], self.num_labels
         )
 
+        self.model_name = config_dict["model_name"]
+
         if config_dict["attention_activation"] == "sharp":
             self.attention_act = torch.exp
         elif config_dict["attention_activation"] == "soft":
@@ -133,6 +135,7 @@ class SoftAttentionSeqClassModel(nn.Module):
         inputs_embeds=None,
         labels=None,
         token_labels=None,
+        offset_mapping=None,
         output_attentions=None,
         output_hidden_states=None,
         return_dict=None,
@@ -266,6 +269,10 @@ class SoftAttentionSeqClassModel(nn.Module):
                 print(f"token_labels: \n{token_labels}\n")
 
             if self.supervise_tokens == True:
+                word_attentions = self._apply_subword_method(
+                    self.attention_weights_unnormalised, offset_mapping
+                )
+
                 token_labels = token_labels[:, 1:]
                 zero_labels = torch.where(
                     token_labels == 1, token_labels, torch.zeros_like(token_labels)
@@ -278,52 +285,26 @@ class SoftAttentionSeqClassModel(nn.Module):
                 mse_loss = nn.MSELoss(reduction="mean")
                 token_loss = mse_loss(masked_token_attention, zero_labels)
 
+                masked_word_attention = torch.where(
+                    ((token_labels == 0) | (token_labels == 1)),
+                    word_attentions,
+                    torch.zeros_like(token_labels),
+                )
+
+                # print(masked_token_attention)
+                # print(masked_word_attention)
+
+                # if not torch.equal(masked_token_attention, masked_word_attention):
+                #     print("\ndiff!\n")
+                #     print(self.attention_weights_unnormalised)
+                #     sys.exit()
+
                 loss += token_loss
 
             if self.debug:
                 print(f"zero_labels: \n{zero_labels}\n")
                 print(f"masked_token_attention: \n{masked_token_attention}\n")
                 print(f"token_loss: \n{token_loss}\n")
-
-            # if self.beta != 0.0 and token_scores is not None:
-            #     loss_fct = MSELoss()
-            #     # only supervise the first token of a word - ignore the rest (with labels==-100)
-            #     # create a mask to remove attn values for token scores == -100:
-            #     masked_token_scores = torch.where(
-            #         token_scores[:, 1:] != -100,
-            #         token_scores[:, 1:],
-            #         torch.zeros_like(token_scores[:, 1:]),
-            #     )
-
-            #     attn_weights_supervised = self.attention_weights_unnormalised
-            #     if self.normalise_labels:
-            #         attn_weights_supervised = self.attention_weights_normalised
-
-            #     masked_attn_scores = torch.where(
-            #         token_scores[:, 1:] != -100,
-            #         attn_weights_supervised,
-            #         torch.zeros_like(attn_weights_supervised),
-            #     )
-            #     l4 = loss_fct(masked_token_scores.view(-1), masked_attn_scores.view(-1))
-            #     loss += self.beta * l4
-
-            # if self.zero_delta != 0.0 and self.zero_n != 0:
-            #     attn_weights_masked = torch.where(
-            #         self._sequence_mask(inp_lengths, maxlen=bert_length),
-            #         self.attention_weights_unnormalised,
-            #         torch.zeros_like(self.attention_weights_unnormalised) + 1e6,
-            #     )
-            #     attn_weights_sorted = attn_weights_masked.sort(dim=1)[0][
-            #         :, : self.zero_n
-            #     ]
-
-            #     attn_weights_mean = torch.mean(
-            #         torch.square(attn_weights_sorted).view(-1)
-            #     )
-            #     # logger.info("attn_weigts_mean: " + str(attn_weights_sorted))
-
-            #     l5 = attn_weights_mean
-            #     loss += self.zero_delta * l5
 
             outputs = (loss,) + outputs
 
@@ -343,6 +324,99 @@ class SoftAttentionSeqClassModel(nn.Module):
 
         mask.type(dtype)
         return mask
+
+    def _apply_subword_method(
+        self, token_attention_output, offset_mapping, subword_method="max"
+    ):
+        word_attention_output = token_attention_output.clone()
+
+        if "bert-base" in self.model_name:
+            individual_subword_indices = (offset_mapping[:, :, 0] != 0).nonzero(
+                as_tuple=False
+            )
+        elif "deberta-base" in self.model_name:
+            individual_subword_indices = (offset_mapping[:, :, 0] != 0).nonzero(
+                as_tuple=False
+            )
+        elif "roberta-base" in self.model_name:
+            individual_subword_indices = (offset_mapping[:, :, 0] > 1).nonzero(
+                as_tuple=False
+            )
+        if individual_subword_indices.nelement() != 0:
+            # print(individual_subword_indices)
+            grouped_subword_indices = []
+            index_group = None
+            for i in range(len(individual_subword_indices)):
+                # print(individual_subword_indices[i])
+                if index_group == None:
+                    index_group = [
+                        torch.tensor(
+                            [
+                                individual_subword_indices[i][0],
+                                individual_subword_indices[i][1] - 1,
+                            ],
+                            device=self.device,
+                        ),
+                        individual_subword_indices[i],
+                    ]
+                    continue
+
+                if (index_group[-1][0] == (individual_subword_indices[i][0])) and (
+                    index_group[-1][1] == (individual_subword_indices[i][1] - 1)
+                ):
+                    index_group.append(
+                        torch.tensor(
+                            [
+                                individual_subword_indices[i][0],
+                                individual_subword_indices[i][1],
+                            ],
+                            device=self.device,
+                        )
+                    )
+
+                else:
+                    # print(index_group)
+                    grouped_subword_indices.append(torch.stack(index_group))
+                    index_group = [
+                        torch.tensor(
+                            [
+                                individual_subword_indices[i][0],
+                                individual_subword_indices[i][1] - 1,
+                            ],
+                            device=self.device,
+                        ),
+                        individual_subword_indices[i],
+                    ]
+            grouped_subword_indices.append(torch.stack(index_group))
+
+            # print(grouped_subword_indices)
+
+            for group in grouped_subword_indices:
+                for index in group:
+                    index[1] -= 1
+
+            # print(grouped_subword_indices)
+
+            for group in grouped_subword_indices:
+                replacement_index_i = group[0][0]
+                replacement_index_j = group[0][1]
+                subword_indices = torch.stack([subword[1] for subword in group])
+                subword_values = torch.index_select(
+                    torch.index_select(
+                        token_attention_output, dim=0, index=replacement_index_i,
+                    ),
+                    dim=1,
+                    index=subword_indices,
+                )
+                if subword_method == "max":
+                    replacement = torch.max(subword_values)
+                elif subword_method == "mean":
+                    replacement = torch.mean(subword_values)
+                word_attention_output[
+                    replacement_index_i, replacement_index_j
+                ] = replacement
+
+        return word_attention_output
 
 
 class SeqClassModel(PreTrainedModel):

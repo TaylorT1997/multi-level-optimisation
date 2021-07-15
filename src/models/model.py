@@ -104,9 +104,6 @@ class TokenModel(nn.Module):
             print(f"token_attention_output: \n{token_attention_output}\n")
 
         word_attention_output = token_attention_output.clone()
-        individual_subword_indices = (offset_mapping[:, :, 0] != 0).nonzero(
-            as_tuple=False
-        )
 
         if "bert-base" in self.pretrained_model:
             individual_subword_indices = (offset_mapping[:, :, 0] != 0).nonzero(

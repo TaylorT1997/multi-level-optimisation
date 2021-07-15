@@ -460,6 +460,7 @@ def train(args):
                     attention_mask=attention_masks,
                     labels=labels.long(),
                     token_labels=token_labels,
+                    offset_mapping=offset_mapping,
                 )
                 loss, logits, token_logits = outputs
                 seq_logits = torch.argmax(logits, dim=1)
