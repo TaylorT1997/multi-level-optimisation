@@ -203,7 +203,7 @@ def train(args):
         "soft_attention_alpha": 0.1,
         "soft_attention_gamma": 0.1,
         "soft_attention_beta": 0.0,
-        "square_attention": True,
+        "square_attention": False,
         "freeze_bert_layers_up_to": 0,
         "zero_n": 0,
         "zero_delta": 0.0,
@@ -727,6 +727,7 @@ def train(args):
                         attention_mask=attention_masks,
                         labels=labels.long(),
                         token_labels=token_labels,
+                        offset_mapping=offset_mapping,
                     )
                     loss, logits, token_logits = outputs
                     seq_logits = torch.argmax(logits, dim=1)
