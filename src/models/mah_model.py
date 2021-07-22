@@ -95,10 +95,14 @@ class MultiAttentionHeadModel(nn.Module):
         # Access last multi-headed attention layer for attention values
         # (batch_size, num_heads, sequence_length, sequence_length)
         last_pretrained_layer = pretrained_output.attentions[-1]
+        cls_attentions = last_pretrained_layer[:, :, 0, :]
 
         if self.debug:
             print(f"last_pretrained_layer shape: \n{last_pretrained_layer.shape}\n")
             print(f"last_pretrained_layer: \n{last_pretrained_layer}\n")
+
+            print(f"cls_attentions shape: \n{cls_attentions.shape}\n")
+            print(f"cls_attentions: \n{cls_attentions}\n")
 
         sys.exit()
 

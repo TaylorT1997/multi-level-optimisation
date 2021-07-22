@@ -7,9 +7,9 @@ parameters:
   config:
     distribution: categorical
     values:
-      - ../config_conll10.txt
-      - ../config_fce.txt
-      - ../config_wi_locness.txt
+      - ../configs/config_conll10.txt
+      - ../configs/config_fce.txt
+      - ../configs/config_wi_locness.txt
   subword_method:
     distribution: categorical
     values:
@@ -43,3 +43,11 @@ parameters:
       - 0.1
       - 0.5
       - 1.0
+  seed:
+    distribution: categorical
+    values:
+      - 100
+      - 101
+      - 102
+      - 103
+      - 104

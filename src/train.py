@@ -83,8 +83,6 @@ def train(args):
         print()
         print("Optimizer: {}".format(args.lr_optimizer))
         print("Scheduler: {}".format(args.lr_scheduler))
-        print("Scheduler step size: {}".format(args.lr_scheduler_step))
-        print("Scheduler gamma: {}".format(args.lr_scheduler_gamma))
         print("Scheduler warmup ratio: {}".format(args.lr_scheduler_warmup_ratio))
         print()
         print("Maximum sequence length: {}".format(args.max_sequence_length))
@@ -181,6 +179,11 @@ def train(args):
     zero_shot_config_dict = {
         "dataset": args.dataset,
         "model_name": args.model,
+        "token_supervision": args.token_supervision,
+        "sequence_supervision": args.sequence_supervision,
+        "use_only_token_attention": args.use_only_token_attention,
+        "use_multi_head_attention": args.use_multi_head_attention,
+        "supervised_heads": list(map(int, args.supervised_heads.split(" "))),
         "seed": args.seed,
         "lowercase": args.use_lowercase,
         "hid_to_attn_dropout": 0.1,
@@ -193,9 +196,6 @@ def train(args):
         "soft_attention_gamma": 0.1,
         "soft_attention_beta": 0.0,
         "square_attention": True,
-        "freeze_bert_layers_up_to": 0,
-        "zero_n": 0,
-        "zero_delta": 0.0,
     }
 
     # Define model back bone and architecture
@@ -325,7 +325,7 @@ def train(args):
             # )
 
             model = SeqClassModel(
-                params_dict=zero_shot_config_dict, model_config=config
+                model_config=config, config_dict=zero_shot_config_dict
             )
         elif args.model_architecture == "base":
             model_config = RobertaConfig.from_pretrained(args.model, num_labels=2)
@@ -356,11 +356,7 @@ def train(args):
             weight_decay=args.lr_weight_decay,
         )
 
-    if args.lr_scheduler == "steplr":
-        scheduler = optim.lr_scheduler.StepLR(
-            optimizer, step_size=args.lr_scheduler_step, gamma=args.lr_scheduler_gamma
-        )
-    elif args.lr_scheduler == "warmup_linear":
+    if args.lr_scheduler == "warmup_linear":
         # max_steps = math.ceil(args.num_train_epochs * num_update_steps_per_epoch)
 
         train_steps = args.epochs * (len(train_dataset) // args.batch_size)
@@ -1480,6 +1476,28 @@ if __name__ == "__main__":
         action="store_true",
         default=False,
         help="Use lowercase as input (default: False)",
+    )
+
+    parser.add(
+        "--use_only_token_attention",
+        action="store_true",
+        default=False,
+        help="Use token attentions only, no sequence layer (default: False)",
+    )
+
+    parser.add(
+        "--use_multi_head_attention",
+        action="store_true",
+        default=False,
+        help="Use multi-head attention weights instead of attention layer (default: False)",
+    )
+
+    parser.add(
+        "--supervised_heads",
+        action="store",
+        type=str,
+        default="0",
+        help="Heads to supervise on (default: [0])",
     )
 
     parser.add(
