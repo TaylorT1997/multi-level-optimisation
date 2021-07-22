@@ -31,7 +31,10 @@ from transformers import (
 
 from data_loading.datasets import BinaryTokenTSVDataset
 from models.model import TokenModel
+
 from models.seq_class_model import SeqClassModel
+
+from models.seq_class_model_2 import SeqClassModel as SeqClassModel2
 
 from sklearn.metrics import average_precision_score
 
@@ -176,25 +179,11 @@ def train(args):
     )
 
     zero_shot_config_dict = {
-        "experiment_name": "final_soft_attention",
         "dataset": args.dataset,
         "model_name": args.model,
-        "max_seq_length": args.max_sequence_length,
-        "per_device_train_batch_size": args.batch_size,
-        "per_device_eval_batch_size": args.batch_size * 4,
-        "num_train_epochs": args.epochs,
-        "warmup_ratio": args.lr_scheduler_warmup_ratio,
-        "learning_rate": args.learning_rate,
-        "weight_decay": args.lr_weight_decay,
         "seed": args.seed,
-        "adam_epsilon": args.lr_epsilon,
         "lowercase": args.use_lowercase,
-        "gradient_accumulation_steps": 1,
-        "save_steps": 500,
-        "logging_steps": 500,
-        "do_mask_words": False,
-        "mask_prob": 0.0,
-        "hid_to_attn_dropout": 0.10,
+        "hid_to_attn_dropout": 0.1,
         "attention_evidence_size": 100,
         "final_hidden_layer_size": 300,
         "initializer_name": "glorot",
@@ -203,7 +192,7 @@ def train(args):
         "soft_attention_alpha": 0.1,
         "soft_attention_gamma": 0.1,
         "soft_attention_beta": 0.0,
-        "square_attention": False,
+        "square_attention": True,
         "freeze_bert_layers_up_to": 0,
         "zero_n": 0,
         "zero_delta": 0.0,
@@ -224,7 +213,7 @@ def train(args):
                 normalise_supervised_losses=args.normalise_supervised_losses,
                 normalise_regularization_losses=args.normalise_regularization_losses,
                 subword_method=args.subword_method,
-                device=device,
+                seed=args.seed,
                 debug=args.debug,
             )
         elif args.model_architecture == "zero_shot":
@@ -241,6 +230,7 @@ def train(args):
             model = SeqClassModel(
                 params_dict=zero_shot_config_dict, model_config=config
             )
+
         elif args.model_architecture == "base":
             model_config = BertConfig.from_pretrained(args.model, num_labels=2)
             model = BertForSequenceClassification(model_config)
@@ -263,7 +253,7 @@ def train(args):
                 normalise_supervised_losses=args.normalise_supervised_losses,
                 normalise_regularization_losses=args.normalise_regularization_losses,
                 subword_method=args.subword_method,
-                device=device,
+                seed=args.seed,
                 debug=args.debug,
             )
         elif args.model_architecture == "zero_shot":
@@ -302,7 +292,7 @@ def train(args):
                 normalise_supervised_losses=args.normalise_supervised_losses,
                 normalise_regularization_losses=args.normalise_regularization_losses,
                 subword_method=args.subword_method,
-                device=device,
+                seed=args.seed,
                 debug=args.debug,
             )
         elif args.model_architecture == "zero_shot":
@@ -316,6 +306,24 @@ def train(args):
                 output_hidden_states=True,
                 output_attentions=True,
             )
+
+            # model = SeqClassModel2(
+            #     config,
+            #     pretrained_model=args.model,
+            #     soft_attention_beta=args.soft_attention_beta,
+            #     sentence_loss_weight=args.sentence_loss_weight,
+            #     token_loss_weight=args.token_loss_weight,
+            #     regularizer_loss_weight=args.regularizer_loss_weight,
+            #     token_supervision=args.token_supervision,
+            #     sequence_supervision=args.sequence_supervision,
+            #     regularization_losses=args.regularization_losses,
+            #     normalise_supervised_losses=args.normalise_supervised_losses,
+            #     normalise_regularization_losses=args.normalise_regularization_losses,
+            #     subword_method=args.subword_method,
+            #     seed=args.seed,
+            #     debug=args.debug,
+            # )
+
             model = SeqClassModel(
                 params_dict=zero_shot_config_dict, model_config=config
             )
@@ -463,14 +471,20 @@ def train(args):
                     offset_mapping=offset_mapping,
                 )
                 loss, logits, token_logits = outputs
-                seq_logits = torch.argmax(logits, dim=1)
+                if logits.shape[1] == 2:
+                    seq_logits = torch.argmax(logits, dim=1)
+                else:
+                    seq_logits = logits
 
             elif args.model_architecture == "base":
                 outputs = model(
                     input_ids, attention_mask=attention_masks, labels=labels.long(),
                 )
                 loss = outputs.loss
-                seq_logits = torch.argmax(outputs.logits, dim=1)
+                if logits.shape[1] == 2:
+                    seq_logits = torch.argmax(outputs.logits, dim=1)
+                else:
+                    seq_logits = logits
 
             # Backpropagate losses and update weights
             loss.backward()
@@ -730,14 +744,20 @@ def train(args):
                         offset_mapping=offset_mapping,
                     )
                     loss, logits, token_logits = outputs
-                    seq_logits = torch.argmax(logits, dim=1)
+                    if logits.shape[1] == 2:
+                        seq_logits = torch.argmax(logits, dim=1)
+                    else:
+                        seq_logits = logits
 
                 elif args.model_architecture == "base":
                     outputs = model(
                         input_ids, attention_mask=attention_masks, labels=labels.long(),
                     )
                     loss = outputs.loss
-                    seq_logits = torch.argmax(outputs.logits, dim=1)
+                    if logits.shape[1] == 2:
+                        seq_logits = torch.argmax(outputs.logits, dim=1)
+                    else:
+                        seq_logits = logits
 
                 # Calculate token prediction metrics
                 if (

@@ -9,9 +9,9 @@ model_architecture = zero_shot
 dataset = "fce"
 batch_size = 64
 
-model_path = "fce_2021_07_14_21_26_57"
+model_path = "fce_2021_07_20_17_38_50"
 
-max_sequence_length = 512
+max_sequence_length = 127
 soft_attention_beta = 2
 subword_method = "max"
 use_lowercase = true

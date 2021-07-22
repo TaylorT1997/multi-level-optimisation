@@ -8,6 +8,7 @@ from transformers import (
     DebertaModel,
     RobertaConfig,
     RobertaModel,
+    set_seed,
 )
 import sys
 
@@ -28,10 +29,12 @@ class TokenModel(nn.Module):
         normalise_regularization_losses=False,
         subword_method="max",
         mask_subwords=False,
-        device="cuda",
+        seed=666,
         debug=False,
     ):
         super(TokenModel, self).__init__()
+
+        set_seed(seed)
         if "bert-base" in pretrained_model:
             model_config = BertConfig.from_pretrained(pretrained_model, num_labels=1)
             self.seq2seq_model = BertModel(model_config)
@@ -75,7 +78,9 @@ class TokenModel(nn.Module):
         self.subword_method = subword_method
         self.mask_subwords = mask_subwords
 
-        self.device = device
+        self.device = (
+            torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+        )
         self.debug = debug
         self.pretrained_model = pretrained_model
 

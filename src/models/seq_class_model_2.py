@@ -1,5 +1,4 @@
 import dataclasses
-import logging
 import os
 import sys
 from dataclasses import dataclass, field
@@ -24,7 +23,12 @@ from transformers import (
     PreTrainedModel,
     RobertaModel,
     BertModel,
+    DebertaModel,
     BertPreTrainedModel,
+    BertConfig,
+    RobertaConfig,
+    DebertaConfig,
+    set_seed,
 )
 
 from transformers import GlueDataTrainingArguments as DataTrainingArguments
@@ -50,67 +54,68 @@ from utils.tsv_dataset import (
 
 # from utils.arguments import datasets, DataTrainingArguments, ModelArguments
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
 
 class SoftAttentionSeqClassModel(nn.Module):
     def __init__(
         self,
-        config_dict,
-        bert_out_size,
-        num_labels,
+        pretrained_model="bert-base-cased",
+        use_attention_layer=True,
+        num_labels=2,
+        soft_attention_beta=1,
+        sentence_loss_weight=1,
+        token_loss_weight=1,
+        regularizer_loss_weight=0.01,
+        dropout=0.1,
         token_supervision=True,
-        sequence_supervision=False,
-        use_only_token_attention=True,
+        sequence_supervision=True,
+        regularization_losses=True,
+        normalise_supervised_losses=False,
+        normalise_regularization_losses=False,
+        use_sequence_layer=True,
+        subword_method="max",
+        mask_subwords=False,
+        initializer_name="glorot",
+        bert_out_size=768,
+        seed=666,
         debug=False,
     ):
-        super().__init__()
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.debug = debug
+        super(SoftAttentionSeqClassModel, self).__init__()
+        self.device = (
+            torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+        )
 
-        self.initializer_name = config_dict["initializer_name"]
-        self.square_attention = config_dict.get("square_attention", False)
+        self.pretrained_model = pretrained_model
+        self.use_attention_layer = use_attention_layer
         self.num_labels = num_labels
+        self.soft_attention_beta = soft_attention_beta
+        self.sentence_loss_weight = sentence_loss_weight
+        self.token_loss_weight = token_loss_weight
+        self.regularizer_loss_weight = regularizer_loss_weight
+        self.normalise_supervised_losses = normalise_supervised_losses
+        self.normalise_regularization_losses = normalise_regularization_losses
+        self.dropout = dropout
         self.token_supervision = token_supervision
         self.sequence_supervision = sequence_supervision
-        self.use_only_token_attention = use_only_token_attention
+        self.regularization_losses = regularization_losses
+        self.subword_method = subword_method
+        self.mask_subwords = mask_subwords
+        self.initializer_name = initializer_name
 
-        self.alpha = config_dict.get("soft_attention_alpha", 0.0)
-        self.gamma = config_dict.get(
-            "soft_attention_gamma", 0.0
-        )  # weight for loss based on token attn
-        self.beta = config_dict.get(
-            "soft_attention_beta", 0.0
-        )  # weight based on token scores
+        self.debug = debug
 
-        self.dropout = nn.Dropout(p=config_dict["hid_to_attn_dropout"])
+        self.use_sequence_layer = use_sequence_layer
 
-        self.attention_evidence = nn.Linear(
-            bert_out_size, config_dict["attention_evidence_size"]
-        )  # layer for predicting attention weights
-        self.attention_weights = nn.Linear(config_dict["attention_evidence_size"], 1)
+        self.dropout = nn.Dropout(p=self.dropout)
 
-        self.final_hidden = nn.Linear(
-            bert_out_size, config_dict["final_hidden_layer_size"],
-        )
-        self.result_layer = nn.Linear(
-            config_dict["final_hidden_layer_size"], self.num_labels
-        )
+        self.attention_evidence = nn.Linear(bert_out_size, 100)
+        self.attention_weights = nn.Linear(100, 1)
 
-        self.model_name = config_dict["model_name"]
+        self.final_hidden = nn.Linear(bert_out_size, 300,)
+        self.result_layer = nn.Linear(300, 2)
 
-        if config_dict["attention_activation"] == "sharp":
-            self.attention_act = torch.exp
-        elif config_dict["attention_activation"] == "soft":
-            self.attention_act = torch.sigmoid
-        elif config_dict["attention_activation"] == "linear":
-            pass
-        else:
-            raise ValueError(
-                "Unknown activation for attention: "
-                + str(self.config["attention_activation"])
-            )
+        self.pretrained_model = pretrained_model
+        self.attention_act = torch.sigmoid
+
         self.apply(self.init_weights)
 
     def __call__(self, *input, **kwargs):
@@ -185,8 +190,12 @@ class SoftAttentionSeqClassModel(nn.Module):
             print(f"attn_weights_masked: \n{attn_weights}\n")
 
         self.attention_weights_unnormalised = attn_weights
-        if self.square_attention:
-            attn_weights = torch.square(attn_weights)
+        attn_weights = torch.pow(attn_weights, self.soft_attention_beta)
+
+        if self.debug:
+            print(f"attn_weights_squared shape: \n{attn_weights.shape}\n")
+            print(f"attn_weights_squared: \n{attn_weights}\n")
+
         # normalise attn weights
         attn_weights = attn_weights / torch.sum(attn_weights, dim=1, keepdim=True)
         self.attention_weights_normalised = attn_weights
@@ -206,17 +215,22 @@ class SoftAttentionSeqClassModel(nn.Module):
         )
 
         if self.debug:
-            print(f"proc_tensor shape: \n{proc_tensor.shape}\n")
-            print(f"proc_tensor: \n{proc_tensor}\n")
+            print(
+                f"attention_weights_unnormalised shape: \n{self.attention_weights_unnormalised.shape}\n"
+            )
+            print(
+                f"attention_weights_unnormalised: \n{self.attention_weights_unnormalised}\n"
+            )
 
-            print(f"self.sentence_scores shape: \n{self.sentence_scores.shape}\n")
-            print(f"self.sentence_scores: \n{self.sentence_scores}\n")
-
-        if self.use_only_token_attention:
+        if not self.use_sequence_layer:
+            print("!" * 50)
             max_token_attention = torch.max(self.attention_weights_unnormalised, dim=1)
             self.sentence_scores = max_token_attention.values.unsqueeze(1)
 
         if self.debug:
+            print(f"proc_tensor shape: \n{proc_tensor.shape}\n")
+            print(f"proc_tensor: \n{proc_tensor}\n")
+
             print(f"self.sentence_scores shape: \n{self.sentence_scores.shape}\n")
             print(f"self.sentence_scores: \n{self.sentence_scores}\n")
 
@@ -230,25 +244,28 @@ class SoftAttentionSeqClassModel(nn.Module):
                 dim=1,
             ),
         )
-        # loss = torch.tensor(0, device=self.device)
+        loss = None
         if labels is not None:
             # SEQUENCE LOSS
-            if self.sequence_supervision:
-                if self.sentence_scores.shape[1] == 1:
-                    #  We are doing regression
-                    loss_fct = MSELoss()
-                    loss = loss_fct(self.sentence_scores.view(-1), labels.view(-1))
-                else:
-                    loss_fct = CrossEntropyLoss()
-                    loss = loss_fct(
-                        self.sentence_scores.view(-1, self.num_labels), labels.view(-1)
-                    )
+            if self.num_labels == 1:
+                loss_fct = MSELoss()
+                loss = self.sentence_loss_weight * loss_fct(
+                    self.sentence_scores.view(-1), labels.view(-1)
+                )
+            else:
+                loss_fct = CrossEntropyLoss()
+                loss = self.sentence_loss_weight * loss_fct(
+                    self.sentence_scores.view(-1, self.num_labels), labels.view(-1)
+                )
+
             if self.debug:
                 print(f"num_labels: \n{self.num_labels}\n")
                 print(f"labels: \n{labels}\n")
                 print(f"loss: \n{loss}\n")
+                print(self.sentence_scores.shape[1])
 
-            if self.alpha != 0:
+            # REGULARIZER LOSS A
+            if self.regularizer_loss_weight != 0:
                 min_attentions, _ = torch.min(
                     torch.where(
                         self._sequence_mask(inp_lengths, maxlen=bert_length),
@@ -257,23 +274,24 @@ class SoftAttentionSeqClassModel(nn.Module):
                     ),  # [:, 1:],
                     dim=1,
                 )
-                l2 = self.alpha * torch.mean(torch.square(min_attentions.view(-1)))
-
-                loss = l2
+                l2 = self.regularizer_loss_weight * torch.mean(
+                    torch.square(min_attentions.view(-1))
+                )
+                loss += l2
 
             if self.debug:
                 print(f"alpha min_attentions: \n{min_attentions}\n")
                 print(f"alpha l2: \n{l2}\n")
 
-            if self.gamma != 0:
-                # don't include 0 for CLS token
+            # REGULARIZER LOSS B
+            if self.regularizer_loss_weight != 0:
                 attn_weights_masked = torch.where(
                     self._sequence_mask(inp_lengths, maxlen=bert_length),
                     self.attention_weights_unnormalised,
                     torch.zeros_like(self.attention_weights_unnormalised) - 1e6,
                 )
                 max_attentions, _ = torch.max(attn_weights_masked, dim=1,)
-                l3 = self.gamma * torch.mean(
+                l3 = self.regularizer_loss_weight * torch.mean(
                     torch.square(max_attentions.view(-1) - labels.view(-1))
                 )
                 loss += l3
@@ -285,6 +303,7 @@ class SoftAttentionSeqClassModel(nn.Module):
 
                 print(f"token_labels: \n{token_labels}\n")
 
+            # TOKEN LOSS
             if self.token_supervision == True:
                 word_attentions = self._apply_subword_method(
                     self.attention_weights_unnormalised, offset_mapping
@@ -302,21 +321,13 @@ class SoftAttentionSeqClassModel(nn.Module):
                 mse_loss = nn.MSELoss(reduction="mean")
                 token_loss = mse_loss(masked_token_attention, zero_labels)
 
-                # masked_word_attention = torch.where(
-                #     ((token_labels == 0) | (token_labels == 1)),
-                #     word_attentions,
-                #     torch.zeros_like(token_labels),
-                # )
+                masked_word_attention = torch.where(
+                    ((token_labels == 0) | (token_labels == 1)),
+                    word_attentions,
+                    torch.zeros_like(token_labels),
+                )
 
-                # print(masked_token_attention)
-                # print(masked_word_attention)
-
-                # if not torch.equal(masked_token_attention, masked_word_attention):
-                #     print("\ndiff!\n")
-                #     print(self.attention_weights_unnormalised)
-                #     sys.exit()
-
-                loss += token_loss
+                loss += self.token_loss_weight * token_loss
 
                 if self.debug:
                     print(f"zero_labels: \n{zero_labels}\n")
@@ -327,7 +338,9 @@ class SoftAttentionSeqClassModel(nn.Module):
 
             if self.debug:
                 print(f"outputs: \n{outputs}\n")
-                sys.exit()
+
+        if self.debug:
+            sys.exit()
 
         return outputs
 
@@ -343,19 +356,19 @@ class SoftAttentionSeqClassModel(nn.Module):
         return mask
 
     def _apply_subword_method(
-        self, token_attention_output, offset_mapping, subword_method="max"
+        self, token_attention_output, offset_mapping,
     ):
         word_attention_output = token_attention_output.clone()
 
-        if "bert-base" in self.model_name:
+        if "bert-base" in self.pretrained_model:
             individual_subword_indices = (offset_mapping[:, :, 0] != 0).nonzero(
                 as_tuple=False
             )
-        elif "deberta-base" in self.model_name:
+        elif "deberta-base" in self.pretrained_model:
             individual_subword_indices = (offset_mapping[:, :, 0] != 0).nonzero(
                 as_tuple=False
             )
-        elif "roberta-base" in self.model_name:
+        elif "roberta-base" in self.pretrained_model:
             individual_subword_indices = (offset_mapping[:, :, 0] > 1).nonzero(
                 as_tuple=False
             )
@@ -425,9 +438,9 @@ class SoftAttentionSeqClassModel(nn.Module):
                     dim=1,
                     index=subword_indices,
                 )
-                if subword_method == "max":
+                if self.subword_method == "max":
                     replacement = torch.max(subword_values)
-                elif subword_method == "mean":
+                elif self.subword_method == "mean":
                     replacement = torch.mean(subword_values)
                 word_attention_output[
                     replacement_index_i, replacement_index_j
@@ -437,40 +450,101 @@ class SoftAttentionSeqClassModel(nn.Module):
 
 
 class SeqClassModel(PreTrainedModel):
-    model_name: str
-    config_dict: Dict
-    base_model_prefix = "seq_class"
-
-    def __init__(self, model_config, params_dict):
+    def __init__(
+        self,
+        model_config,
+        pretrained_model="bert-base-cased",
+        use_attention_layer=True,
+        num_labels=2,
+        soft_attention_beta=1,
+        sentence_loss_weight=1,
+        token_loss_weight=1,
+        regularizer_loss_weight=0.01,
+        dropout=0.1,
+        token_supervision=True,
+        sequence_supervision=True,
+        regularization_losses=True,
+        normalise_supervised_losses=False,
+        normalise_regularization_losses=False,
+        use_sequence_layer=True,
+        subword_method="max",
+        mask_subwords=False,
+        initializer_name="glorot",
+        seed=666,
+        debug=False,
+    ):
         super().__init__(model_config)
 
-        self.config_dict = params_dict
-        self.model_name = self.config_dict.get("model_name")
+        self.pretrained_model = pretrained_model
+        self.use_attention_layer = use_attention_layer
+        self.num_labels = num_labels
+        self.soft_attention_beta = soft_attention_beta
+        self.sentence_loss_weight = sentence_loss_weight
+        self.token_loss_weight = token_loss_weight
+        self.regularizer_loss_weight = regularizer_loss_weight
+        self.normalise_supervised_losses = normalise_supervised_losses
+        self.normalise_regularization_losses = normalise_regularization_losses
+        self.dropout = dropout
+        self.token_supervision = token_supervision
+        self.sequence_supervision = sequence_supervision
+        self.regularization_losses = regularization_losses
+        self.subword_method = subword_method
+        self.mask_subwords = mask_subwords
+        self.initializer_name = initializer_name
+        self.use_sequence_layer = use_sequence_layer
 
-        set_seed(self.config_dict["seed"])
+        self.debug = debug
+        self.pretrained_model = pretrained_model
+        self.seed = seed
 
-        ## straight from HuggingFace BERT/Roberta code
-        self.num_labels = model_config.num_labels
-        self.initializer_name = self.config_dict["initializer_name"]
+        set_seed(self.seed)
 
         self.bert = AutoModel.from_pretrained(
-            self.config_dict["model_name"],
-            from_tf=bool(".ckpt" in self.config_dict["model_name"]),
+            self.pretrained_model,
+            from_tf=bool(".ckpt" in self.pretrained_model),
             config=model_config,
         )
 
-        cnt = 0
-        for layer in self.bert.children():
-            if cnt >= self.config_dict.get("freeze_bert_layers_up_to", 0):
-                break
-            cnt += 1
-            for param in layer.parameters():
-                param.requires_grad = False
+        if "bert-base" in pretrained_model:
+            model_config = BertConfig.from_pretrained(
+                pretrained_model, num_labels=self.num_labels
+            )
+            self.bert = BertModel(model_config)
+        elif "deberta-base" in pretrained_model:
+            model_config = DebertaConfig.from_pretrained(
+                pretrained_model, num_labels=self.num_labels
+            )
+            self.bert = DebertaModel(model_config)
+        elif "roberta-base" in pretrained_model:
+            model_config = RobertaConfig.from_pretrained(
+                pretrained_model, num_labels=self.num_labels
+            )
+            self.bert = RobertaModel(model_config)
+        else:
+            print(f"Model {pretrained_model} not in library")
 
         self.post_bert_model = None
-        if self.config_dict.get("soft_attention", False):
+        if self.use_attention_layer:
             self.post_bert_model = SoftAttentionSeqClassModel(
-                self.config_dict, self.bert.config.hidden_size, model_config.num_labels,
+                pretrained_model=self.pretrained_model,
+                use_attention_layer=self.use_attention_layer,
+                num_labels=model_config.num_labels,
+                soft_attention_beta=self.soft_attention_beta,
+                sentence_loss_weight=self.soft_attention_beta,
+                token_loss_weight=self.token_loss_weight,
+                regularizer_loss_weight=self.regularizer_loss_weight,
+                dropout=self.dropout,
+                token_supervision=self.token_supervision,
+                sequence_supervision=self.sequence_supervision,
+                regularization_losses=self.regularization_losses,
+                normalise_supervised_losses=self.normalise_supervised_losses,
+                normalise_regularization_losses=self.normalise_regularization_losses,
+                use_sequence_layer=self.use_sequence_layer,
+                subword_method=self.subword_method,
+                mask_subwords=self.mask_subwords,
+                initializer_name=self.initializer_name,
+                seed=self.seed,
+                debug=self.debug,
             )
         else:
             self.dropout = nn.Dropout(model_config.hidden_dropout_prob)
@@ -512,13 +586,6 @@ class SeqClassModel(PreTrainedModel):
         token_scores=None,
         **kwargs,
     ):
-        r"""
-        labels (:obj:`torch.LongTensor` of shape :obj:`(batch_size,)`, `optional`):
-            Labels for computing the sequence classification/regression loss.
-            Indices should be in :obj:`[0, ..., config.num_labels - 1]`.
-            If :obj:`config.num_labels == 1` a regression loss is computed (Mean-Square loss),
-            If :obj:`config.num_labels > 1` a classification loss is computed (Cross-Entropy).
-        """
 
         outputs = self.bert(
             input_ids,

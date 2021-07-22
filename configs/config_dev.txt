@@ -40,4 +40,4 @@ regularization_losses = true
 
 save_model = false
 use_wandb = false
-debug = false
+debug = true

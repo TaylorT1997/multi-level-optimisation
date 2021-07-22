@@ -330,10 +330,17 @@ def test(args):
 
             elif args.model_architecture == "zero_shot":
                 outputs = model(
-                    input_ids, attention_mask=attention_masks, labels=labels.long(), token_labels=token_labels
+                    input_ids,
+                    attention_mask=attention_masks,
+                    labels=labels.long(),
+                    token_labels=token_labels,
+                    offset_mapping=offset_mapping,
                 )
                 loss, logits, token_logits = outputs
-                seq_logits = torch.argmax(logits, dim=1)
+                if logits.shape[1] == 2:
+                    seq_logits = torch.argmax(logits, dim=1)
+                else:
+                    seq_logits = logits
 
             elif args.model_architecture == "base":
                 outputs = model(
