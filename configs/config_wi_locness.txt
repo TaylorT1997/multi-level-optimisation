@@ -13,7 +13,7 @@ epochs = 20
 batch_size = 16
 learning_rate = 2e-5
 early_stopping_patience = 10
-early_stopping_objective = "loss"
+early_stopping_objective = "token_f1"
 
 lr_optimizer = adamw
 lr_momentum = 0.9
@@ -37,9 +37,14 @@ normalise_regularization_losses = false
 subword_method = "max"
 use_lowercase = true
 
-sequence_supervision = false
-token_supervision = true
+sequence_supervision = true
+token_supervision = false
 regularization_losses = true
+
+use_only_token_attention = false
+
+use_multi_head_attention = false
+supervised_heads = 1
 
 save_model = true
 use_wandb = true

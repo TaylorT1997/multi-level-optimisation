@@ -64,6 +64,7 @@ def test(args):
         print("Subword method: {}".format(args.subword_method))
 
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+    # device = torch.device("cpu")
 
     # Set the tokenizer
     if "bert-base" in args.model:
@@ -113,20 +114,16 @@ def test(args):
     )
 
     zero_shot_config_dict = {
-        "experiment_name": "final_soft_attention",
         "dataset": args.dataset,
         "model_name": args.model,
-        "max_seq_length": args.max_sequence_length,
-        "per_device_train_batch_size": args.batch_size,
-        "per_device_eval_batch_size": args.batch_size * 4,
+        "token_supervision": True,
+        "sequence_supervision": False,
+        "use_only_token_attention": args.use_only_token_attention,
+        "use_multi_head_attention": args.use_multi_head_attention,
+        "supervised_heads": list(map(int, args.supervised_heads.split(" "))),
         "seed": args.seed,
         "lowercase": args.use_lowercase,
-        "gradient_accumulation_steps": 1,
-        "save_steps": 500,
-        "logging_steps": 500,
-        "do_mask_words": False,
-        "mask_prob": 0.0,
-        "hid_to_attn_dropout": 0.10,
+        "hid_to_attn_dropout": 0.1,
         "attention_evidence_size": 100,
         "final_hidden_layer_size": 300,
         "initializer_name": "glorot",
@@ -136,9 +133,6 @@ def test(args):
         "soft_attention_gamma": 0.1,
         "soft_attention_beta": 0.0,
         "square_attention": True,
-        "freeze_bert_layers_up_to": 0,
-        "zero_n": 0,
-        "zero_delta": 0.0,
     }
 
     # Define model back bone and architecture
@@ -237,6 +231,19 @@ def test(args):
                 debug=args.debug,
             )
         elif args.model_architecture == "zero_shot":
+            # labels = [negative_label, positive_label]
+            # label_map = {i: label for i, label in enumerate(labels)}
+
+            # config = AutoConfig.from_pretrained(
+            #     args.model,
+            #     id2label=label_map,
+            #     label2id={label: i for i, label in enumerate(labels)},
+            #     output_hidden_states=True,
+            #     output_attentions=True,
+            # )
+            # model = SeqClassModel(
+            #     params_dict=zero_shot_config_dict, model_config=config
+            # )
             labels = [negative_label, positive_label]
             label_map = {i: label for i, label in enumerate(labels)}
 
@@ -248,7 +255,7 @@ def test(args):
                 output_attentions=True,
             )
             model = SeqClassModel(
-                params_dict=zero_shot_config_dict, model_config=config
+                model_config=config, config_dict=zero_shot_config_dict
             )
         elif args.model_architecture == "base":
             model_config = RobertaConfig.from_pretrained(args.model, num_labels=2)
@@ -614,6 +621,28 @@ if __name__ == "__main__":
         action="store_true",
         default=False,
         help="Use lowercase as input (default: False)",
+    )
+
+    parser.add(
+        "--use_only_token_attention",
+        action="store_true",
+        default=False,
+        help="Use token attentions only, no sequence layer (default: False)",
+    )
+
+    parser.add(
+        "--use_multi_head_attention",
+        action="store_true",
+        default=False,
+        help="Use multi-head attention weights instead of attention layer (default: False)",
+    )
+
+    parser.add(
+        "--supervised_heads",
+        action="store",
+        type=str,
+        default="0",
+        help="Heads to supervise on (default: [0])",
     )
 
     parser.add(

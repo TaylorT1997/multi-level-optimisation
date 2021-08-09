@@ -69,6 +69,7 @@ class SoftAttentionSeqClassModel(nn.Module):
     ):
         super().__init__()
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        # self.device = torch.device("cpu")
         self.debug = debug
         set_seed(config_dict["seed"])
 
@@ -157,19 +158,22 @@ class SoftAttentionSeqClassModel(nn.Module):
 
         if self.use_multi_head_attention:
             last_pretrained_layer = bert_outputs.attentions[-1]
-            cls_attentions = last_pretrained_layer[:, :, 0, :]
+            # cls_attentions = last_pretrained_layer[:, :, 0, :]
 
-            aggregated_head_attentions = None
+            aggregated_head_attentions = 0
             for head in self.supervised_heads:
                 head_attention = last_pretrained_layer[:, head, 0, :]
-                if aggregated_head_attentions == None:
+                if aggregated_head_attentions == 0:
                     aggregated_head_attentions = head_attention
                 else:
                     aggregated_head_attentions += head_attention
 
             aggregated_head_attentions /= len(self.supervised_heads)
-
             attn_weights = aggregated_head_attentions[:, 1:]
+            # print(self.supervised_heads[0])
+            # head_attention = last_pretrained_layer[:, self.supervised_heads[0], 0, :]
+            # print(head_attention)
+            # attn_weights = head_attention[:, 1:]
             attn_weights = torch.where(
                 self._sequence_mask(inp_lengths, maxlen=bert_length),
                 attn_weights,
@@ -267,6 +271,7 @@ class SoftAttentionSeqClassModel(nn.Module):
             ),
         )
         # loss = torch.tensor(0, device=self.device)
+        loss = None
         if labels is not None:
             # SEQUENCE LOSS
             if self.sequence_supervision:
@@ -348,6 +353,11 @@ class SoftAttentionSeqClassModel(nn.Module):
                     print(f"zero_labels: \n{zero_labels}\n")
                     print(f"masked_token_attention: \n{masked_token_attention}\n")
                     print(f"token_loss: \n{token_loss}\n")
+
+            if loss == None:
+                print(head_attention)
+                print(loss)
+                sys.exit()
 
             outputs = (loss,) + outputs
 

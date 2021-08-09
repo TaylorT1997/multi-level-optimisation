@@ -6,14 +6,18 @@ model = "roberta-base"
 tokenizer = "roberta-base"
 model_architecture = zero_shot
 
-dataset = "fce"
+dataset = "toxic"
 batch_size = 64
 
-model_path = "fce_2021_07_20_17_38_50"
+model_path = "toxic_2021_08_06_02_42_14"
 
-max_sequence_length = 127
+max_sequence_length = 512
 soft_attention_beta = 2
 subword_method = "max"
 use_lowercase = true
+
+use_only_token_attention = false
+use_multi_head_attention = false
+supervised_heads = 0
 
 use_wandb = false

@@ -520,14 +520,19 @@ def train(args):
 
                 for i in range(len(token_labels_np)):
                     if np.max(token_labels_np[i]) == 1:
-                        ap = average_precision_score(
-                            token_labels_np[i][
-                                (token_labels_np[i] == 1) | (token_labels_np[i] == 0)
-                            ],
-                            token_logits_np[i][
-                                (token_labels_np[i] == 1) | (token_labels_np[i] == 0)
-                            ],
-                        )
+                        try:
+                            ap = average_precision_score(
+                                token_labels_np[i][
+                                    (token_labels_np[i] == 1)
+                                    | (token_labels_np[i] == 0)
+                                ],
+                                token_logits_np[i][
+                                    (token_labels_np[i] == 1)
+                                    | (token_labels_np[i] == 0)
+                                ],
+                            )
+                        except:
+                            ap = 0
 
                         train_token_total_ap += ap
                         num_map_scores += 1
@@ -787,16 +792,19 @@ def train(args):
 
                     for i in range(len(token_labels_np)):
                         if np.max(token_labels_np[i]) == 1:
-                            ap = average_precision_score(
-                                token_labels_np[i][
-                                    (token_labels_np[i] == 1)
-                                    | (token_labels_np[i] == 0)
-                                ],
-                                token_logits_np[i][
-                                    (token_labels_np[i] == 1)
-                                    | (token_labels_np[i] == 0)
-                                ],
-                            )
+                            try:
+                                ap = average_precision_score(
+                                    token_labels_np[i][
+                                        (token_labels_np[i] == 1)
+                                        | (token_labels_np[i] == 0)
+                                    ],
+                                    token_logits_np[i][
+                                        (token_labels_np[i] == 1)
+                                        | (token_labels_np[i] == 0)
+                                    ],
+                                )
+                            except:
+                                ap = 0
 
                             val_token_total_ap += ap
                             num_map_scores += 1
