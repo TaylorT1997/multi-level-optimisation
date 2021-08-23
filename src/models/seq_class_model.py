@@ -157,18 +157,20 @@ class SoftAttentionSeqClassModel(nn.Module):
         after_dropout = self.dropout(bert_hidden_outputs)
 
         if self.use_multi_head_attention:
-            last_pretrained_layer = bert_outputs.attentions[-1]
+            last_pretrained_layer = bert_outputs.attentions[-1].clone()
             # cls_attentions = last_pretrained_layer[:, :, 0, :]
 
-            aggregated_head_attentions = 0
+            aggregated_head_attentions = None
             for head in self.supervised_heads:
                 head_attention = last_pretrained_layer[:, head, 0, :]
-                if aggregated_head_attentions == 0:
+                if aggregated_head_attentions == None:
                     aggregated_head_attentions = head_attention
                 else:
                     aggregated_head_attentions += head_attention
 
-            aggregated_head_attentions /= len(self.supervised_heads)
+            aggregated_head_attentions = aggregated_head_attentions / len(
+                self.supervised_heads
+            )
             attn_weights = aggregated_head_attentions[:, 1:]
             # print(self.supervised_heads[0])
             # head_attention = last_pretrained_layer[:, self.supervised_heads[0], 0, :]
@@ -184,8 +186,8 @@ class SoftAttentionSeqClassModel(nn.Module):
                 print(f"last_pretrained_layer shape: \n{last_pretrained_layer.shape}\n")
                 print(f"last_pretrained_layer: \n{last_pretrained_layer}\n")
 
-                print(f"cls_attentions shape: \n{cls_attentions.shape}\n")
-                print(f"cls_attentions: \n{cls_attentions}\n")
+                # print(f"cls_attentions shape: \n{cls_attentions.shape}\n")
+                # print(f"cls_attentions: \n{cls_attentions}\n")
 
                 print(
                     f"aggregated_head_attentions shape: \n{aggregated_head_attentions.shape}\n"
@@ -285,6 +287,8 @@ class SoftAttentionSeqClassModel(nn.Module):
                     loss = loss_fct(
                         self.sentence_scores.view(-1, self.num_labels), labels.view(-1)
                     )
+                if torch.sum(torch.isnan(loss)).item() != 0:
+                    loss = 0
             if self.debug:
                 print(f"num_labels: \n{self.num_labels}\n")
                 print(f"labels: \n{labels}\n")
@@ -330,7 +334,7 @@ class SoftAttentionSeqClassModel(nn.Module):
 
                 print(f"token_labels: \n{token_labels}\n")
 
-            if self.token_supervision == True:
+            if self.token_supervision == True and token_labels != None:
                 word_attentions = self._apply_subword_method(
                     self.attention_weights_unnormalised, offset_mapping
                 )
@@ -354,7 +358,7 @@ class SoftAttentionSeqClassModel(nn.Module):
                     print(f"masked_token_attention: \n{masked_token_attention}\n")
                     print(f"token_loss: \n{token_loss}\n")
 
-            if loss == None:
+            if torch.sum(torch.isnan(loss)).item() != 0:
                 print(head_attention)
                 print(loss)
                 sys.exit()
@@ -363,7 +367,6 @@ class SoftAttentionSeqClassModel(nn.Module):
 
             if self.debug:
                 print(f"outputs: \n{outputs}\n")
-                sys.exit()
 
         return outputs
 
