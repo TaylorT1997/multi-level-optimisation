@@ -167,7 +167,7 @@ def train(args):
     print()
 
     train_loader = DataLoader(
-        train_dataset, batch_size=args.batch_size, shuffle=True, collate_fn=collate_fn
+        train_dataset, batch_size=args.batch_size, shuffle=False, collate_fn=collate_fn
     )
     val_loader = DataLoader(
         val_dataset,
@@ -175,6 +175,12 @@ def train(args):
         shuffle=False,
         collate_fn=collate_fn,
     )
+
+    num_iterations = len(train_dataset) / args.batch_size
+    print(num_iterations)
+
+    num_token_iterations = round(num_iterations * args.percentage_token_labels)
+    print(num_token_iterations)
 
     zero_shot_config_dict = {
         "dataset": args.dataset,
@@ -306,23 +312,6 @@ def train(args):
                 output_hidden_states=True,
                 output_attentions=True,
             )
-
-            # model = SeqClassModel2(
-            #     config,
-            #     pretrained_model=args.model,
-            #     soft_attention_beta=args.soft_attention_beta,
-            #     sentence_loss_weight=args.sentence_loss_weight,
-            #     token_loss_weight=args.token_loss_weight,
-            #     regularizer_loss_weight=args.regularizer_loss_weight,
-            #     token_supervision=args.token_supervision,
-            #     sequence_supervision=args.sequence_supervision,
-            #     regularization_losses=args.regularization_losses,
-            #     normalise_supervised_losses=args.normalise_supervised_losses,
-            #     normalise_regularization_losses=args.normalise_regularization_losses,
-            #     subword_method=args.subword_method,
-            #     seed=args.seed,
-            #     debug=args.debug,
-            # )
 
             model = SeqClassModel(
                 model_config=config, config_dict=zero_shot_config_dict
@@ -459,13 +448,22 @@ def train(args):
                 token_logits = outputs["token_logits"]
 
             elif args.model_architecture == "zero_shot":
-                outputs = model(
-                    input_ids,
-                    attention_mask=attention_masks,
-                    labels=labels.long(),
-                    token_labels=token_labels,
-                    offset_mapping=offset_mapping,
-                )
+                if train_batches < num_token_iterations:
+                    outputs = model(
+                        input_ids,
+                        attention_mask=attention_masks,
+                        labels=labels.long(),
+                        token_labels=token_labels,
+                        offset_mapping=offset_mapping,
+                    )
+                else:
+                    outputs = model(
+                        input_ids,
+                        attention_mask=attention_masks,
+                        labels=labels.long(),
+                        token_labels=None,
+                        offset_mapping=offset_mapping,
+                    )
                 loss, logits, token_logits = outputs
                 if logits.shape[1] == 2:
                     seq_logits = torch.argmax(logits, dim=1)
@@ -1506,6 +1504,14 @@ if __name__ == "__main__":
         type=str,
         default="0",
         help="Heads to supervise on (default: [0])",
+    )
+
+    parser.add(
+        "--percentage_token_labels",
+        action="store",
+        type=float,
+        default="1.0",
+        help="Percentage of token labels to use (default: 1.0)",
     )
 
     parser.add(
