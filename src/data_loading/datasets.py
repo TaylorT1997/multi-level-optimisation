@@ -2,6 +2,7 @@ import os
 import csv
 import numpy as np
 import sys
+import random
 
 import torch
 import torch.nn as nn
@@ -23,6 +24,7 @@ class BinaryTokenTSVDataset(Dataset):
         include_special_tokens=False,
         use_lowercase=False,
         max_sequence_length=512,
+        shuffle=True,
     ):
         datasets = ["fce", "conll_10", "toxic", "wi_locness"]
 
@@ -32,6 +34,7 @@ class BinaryTokenTSVDataset(Dataset):
         self.include_special_tokens = include_special_tokens
         self.use_lowercase = use_lowercase
         self.max_sequence_length = max_sequence_length
+        self.shuffle = shuffle
 
         if dataset_name == "conll_10":
             data_dir = os.path.join(root_dir, "data", "external", "conll_10")
@@ -72,10 +75,15 @@ class BinaryTokenTSVDataset(Dataset):
             self.token_labels,
         ) = self._get_samples_labels(tsv_file)
 
+        self.shuffle_indices = list(range(len(self.samples)))
+        random.shuffle(self.shuffle_indices)
+
     def __len__(self):
         return len(self.samples)
 
     def __getitem__(self, idx):
+        if self.shuffle:
+            idx = self.shuffle_indices[idx]
         sequence = self.samples[idx]
         sentence_label = self.sentence_label[idx]
         token_labels = self.token_labels[idx]

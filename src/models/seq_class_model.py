@@ -154,6 +154,7 @@ class SoftAttentionSeqClassModel(nn.Module):
         inp_lengths = (attention_mask != 0).sum(dim=1) - 1
         bert_length = input_ids.shape[1] - 1
         bert_hidden_outputs = bert_outputs.last_hidden_state[:, 1:]
+        bert_last_layer_hidden_outputs = bert_outputs.hidden_states[-2][:, 1:]
         after_dropout = self.dropout(bert_hidden_outputs)
 
         if self.use_multi_head_attention:
@@ -247,9 +248,14 @@ class SoftAttentionSeqClassModel(nn.Module):
             proc_tensor = torch.tanh(self.final_hidden(proc_tensor))
 
             self.sentence_scores = torch.sigmoid(self.result_layer(proc_tensor))
-            self.sentence_scores = self.sentence_scores.view(
-                [bert_hidden_outputs.shape[0], self.num_labels]
-            )
+            if self.use_multi_head_attention:
+                self.sentence_scores = self.sentence_scores.view(
+                    [bert_last_layer_hidden_outputs.shape[0], self.num_labels]
+                )
+            else:
+                self.sentence_scores = self.sentence_scores.view(
+                    [bert_hidden_outputs.shape[0], self.num_labels]
+                )
 
             if self.debug:
                 print(f"proc_tensor shape: \n{proc_tensor.shape}\n")

@@ -319,14 +319,27 @@ if __name__ == "__main__":
         if not os.path.exists(os.path.join(target_path, "toxic")):
             os.mkdir(os.path.join(target_path, "toxic"))
 
+        # process_toxic_csv(
+        #     url + "tsd_trial.csv", os.path.join(target_path, "toxic", "tsd_dev.tsv")
+        # )
+        # process_toxic_csv(
+        #     url + "tsd_train.csv", os.path.join(target_path, "toxic", "tsd_train.tsv")
+        # )
+        # process_toxic_csv(
+        #     url + "tsd_test.csv", os.path.join(target_path, "toxic", "tsd_test.tsv")
+        # )
+
         process_toxic_csv(
-            url + "tsd_trial.csv", os.path.join(target_path, "toxic", "tsd_dev.tsv")
+            "/home/tom/Projects/multi-level-optimisation/data/raw/toxic/dev_updated.csv",
+            os.path.join(target_path, "toxic", "tsd_dev.tsv"),
         )
         process_toxic_csv(
-            url + "tsd_train.csv", os.path.join(target_path, "toxic", "tsd_train.tsv")
+            "/home/tom/Projects/multi-level-optimisation/data/raw/toxic/train_updated.csv",
+            os.path.join(target_path, "toxic", "tsd_train.tsv"),
         )
         process_toxic_csv(
-            url + "tsd_test.csv", os.path.join(target_path, "toxic", "tsd_test.tsv")
+            "/home/tom/Projects/multi-level-optimisation/data/raw/toxic/test_updated.csv",
+            os.path.join(target_path, "toxic", "tsd_test.tsv"),
         )
 
     if download_all or "wi_locness" in download_datasets:

@@ -177,10 +177,7 @@ def train(args):
     )
 
     num_iterations = len(train_dataset) / args.batch_size
-    print(num_iterations)
-
     num_token_iterations = round(num_iterations * args.percentage_token_labels)
-    print(num_token_iterations)
 
     zero_shot_config_dict = {
         "dataset": args.dataset,
@@ -626,7 +623,7 @@ def train(args):
             0.25 * token_train_precision + token_train_recall + 1e-99
         )
 
-        token_train_map = train_token_total_ap / num_map_scores
+        token_train_map = train_token_total_ap / (num_map_scores + 1e-99)
 
         train_av_loss = train_total_loss / (train_batches + 1e-99)
 
