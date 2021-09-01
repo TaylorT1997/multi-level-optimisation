@@ -9,7 +9,7 @@ model_architecture = zero_shot
 
 dataset = "toxic"
 
-epochs = 10
+epochs = 20
 batch_size = 24
 learning_rate = 2e-5
 early_stopping_patience = 5
@@ -37,11 +37,11 @@ normalise_regularization_losses = false
 subword_method = "max"
 use_lowercase = true
 
-sequence_supervision = false
-token_supervision = true
+sequence_supervision = true
+token_supervision = false
 regularization_losses = true
 
-use_only_token_attention = true
+use_only_token_attention = false
 
 use_multi_head_attention = false
 supervised_heads = 0 1 2
@@ -52,4 +52,4 @@ save_model = false
 use_wandb = false
 
 debug = false
-seed = 101
+seed = 103

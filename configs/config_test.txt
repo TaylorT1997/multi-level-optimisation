@@ -1,6 +1,6 @@
 # Config settings for train.py
 
-root = "/home/taylort/Projects/multi-level-optimisation/"
+root = "/home/tom/Projects/multi-level-optimisation/"
 
 model = "roberta-base"
 tokenizer = "roberta-base"
@@ -9,9 +9,9 @@ model_architecture = zero_shot
 dataset = "toxic"
 batch_size = 64
 
-model_path = "toxic_2021_08_06_02_42_14"
+model_path = "toxic_2021_08_28_16_35_07"
 
-max_sequence_length = 512
+max_sequence_length = 128
 soft_attention_beta = 2
 subword_method = "max"
 use_lowercase = true
